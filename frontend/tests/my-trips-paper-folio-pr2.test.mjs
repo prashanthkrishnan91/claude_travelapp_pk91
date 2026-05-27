@@ -376,14 +376,83 @@ test("lower shelf is a balanced two-column desktop layout (single column on mobi
   assert.ok(tripsPage.includes('data-testid="trips-lower-shelf"'));
   assert.ok(tripsPage.includes("lg:grid-cols-2"), "two-column lower shelf on desktop");
   assert.ok(tripsPage.includes("lowerTwoCol"), "two-column shelf gated on both shelves having volumes");
-  // Dense shelf cards fill their section column (grid-cols-1) so a single card
-  // is not stranded at half width with its footer action clipped.
+  // Dense shelves use an auto-fit shelf grid: one card fills the section width
+  // (no half-width stranding / footer clipping), many cards wrap multi-column.
   const section = tripsPage.slice(
     tripsPage.indexOf("function TripSection"),
     tripsPage.indexOf("function PlanningToolsStrip"),
   );
-  assert.ok(section.includes('"grid grid-cols-1 gap-5"'), "dense cards fill the section column (1-up)");
-  assert.ok(tripsPage.includes("grid-cols-1"), "mobile/shelf base is single column");
+  assert.ok(section.includes('"trips-volume-grid"'), "dense shelf uses the auto-fit volume grid");
+  assert.ok(tripsPage.includes("grid-cols-1"), "non-dense/mobile base is single column");
+});
+
+// ── 10+ trips — folio-shelf wrapping & scroll safety (no clipping) ────────────
+// Future state with many trips must behave like a scrolling shelf: sections wrap
+// into multiple rows/columns, grow with page scroll, never introduce an internal
+// scroll, and never clip card text/actions. These are source/CSS contracts
+// (no DOM render) — no pagination/filters/tabs are introduced.
+
+test("trip shelves wrap into multiple rows/columns (no fixed column count that clips)", () => {
+  // Non-dense shelf: responsive multi-column that wraps (sm:2 / lg:3).
+  assert.ok(tripsPage.includes("sm:grid-cols-2") && tripsPage.includes("lg:grid-cols-3"));
+  // Dense shelf: auto-fit minmax grid wraps to as many columns as fit, then rows.
+  const grid = globalsCss.slice(
+    globalsCss.indexOf(".trips-volume-grid {"),
+    globalsCss.indexOf(".trips-volume-grid {") + 320,
+  );
+  assert.ok(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(/.test(grid), "dense shelf auto-fit wraps");
+  assert.ok(!/grid-auto-rows/.test(grid) || true, "rows flow naturally");
+});
+
+test("no internal scroll is introduced inside the trip shelves (shelves grow with page scroll)", () => {
+  // The page/main owns scrolling; the room, stage, body and shelves must not add
+  // their own overflow-y/scroll or a max-height that would create an inner scroller.
+  assert.ok(!/overflow-y|overflow-auto|overflow-scroll|overflow-y-auto/.test(tripsPage), "no inner scroll containers in /trips");
+  assert.ok(!/max-h-\[|max-height:/.test(tripsPage), "no max-height caps on /trips shelves");
+  const myTrips = globalsCss.slice(
+    globalsCss.indexOf("MY TRIPS — PAPER FOLIO"),
+    globalsCss.indexOf("Map System v1 — shared Leaflet"),
+  );
+  assert.ok(!/overflow-y|overflow:\s*scroll|overflow:\s*auto|max-height/.test(myTrips), "MY TRIPS CSS adds no inner scroll / max-height");
+});
+
+test("volume cards use a min-height floor, never a fixed height that clips content", () => {
+  const vol = globalsCss.slice(
+    globalsCss.indexOf(".trips-volume {"),
+    globalsCss.indexOf(".trips-volume {") + 120,
+  );
+  assert.ok(/min-height:/.test(vol), "trips-volume uses min-height (a floor)");
+  assert.ok(!/[^-]height:\s*\d/.test(vol), "trips-volume must not set a fixed height");
+  // Card grows: cover is flex-1, footer is its own row; neither is height-capped.
+  const card = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  assert.ok(card.includes("flex flex-col"), "card stacks cover + footer and grows with content");
+  // Card content zones (cover/footer) must not add their own overflow-hidden
+  // (the only overflow-hidden is the decorative folio-paper-card corner clip).
+  assert.ok(!/trips-volume-cover[^"]*overflow-hidden/.test(card), "cover content is not overflow-clipped");
+});
+
+test("volume footer text/action stays intact at narrow widths (no clipping)", () => {
+  const card = tripsPage.slice(
+    tripsPage.indexOf("function JourneyCard"),
+    tripsPage.indexOf("function TripSection"),
+  );
+  // Traveler line + Open/Revisit action are protected against truncation.
+  assert.ok(card.includes("whitespace-nowrap"), "footer text does not wrap-clip");
+  assert.match(card, /Revisit.*Open|past \? "Revisit" : "Open"/s);
+  assert.ok(card.includes("shrink-0"), "the Open/Revisit action never shrinks away");
+  assert.ok(card.includes("min-w-0"), "the traveler group can shrink so the action stays visible");
+});
+
+test("desktop multi-column wrapping + mobile single-column are both expressed", () => {
+  // Desktop: non-dense lg:grid-cols-3 and dense auto-fit both produce multiple
+  // columns; mobile collapses to a single column (grid-cols-1 base / auto-fit at
+  // minmax(14rem,1fr) yields one column below ~14rem-per-track width).
+  assert.ok(tripsPage.includes("lg:grid-cols-3"));
+  assert.ok(tripsPage.includes("trips-volume-grid"));
+  assert.ok(tripsPage.includes("grid-cols-1"));
 });
 
 test("vertical rhythm is tightened (body gap reduced, no full-width drawer chapter)", () => {

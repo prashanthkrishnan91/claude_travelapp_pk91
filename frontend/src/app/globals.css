@@ -9952,9 +9952,22 @@
   }
 
   /* trips-volume: a bound travel volume on the shelf. The folio-journey-entry
-     left stripe reads as the volume's brass binding/spine. */
+     left stripe reads as the volume's brass binding/spine. min-height is a
+     floor only — cards grow with their content, never a fixed height that clips. */
   .trips-volume {
     min-height: 12rem;
+  }
+
+  /* trips-volume-grid: shelf grid for the dense two-column lower shelves. Uses
+     auto-fit + minmax so it scales like a real folio shelf: a single volume
+     fills the section width (no half-width stranding), and many volumes wrap
+     into as many columns as fit and flow into new rows. No fixed height and no
+     overflow — the shelves grow naturally with page scroll for 10+ trips. */
+  .trips-volume-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1.25rem;
+    align-items: stretch;
   }
 
   /* trips-volume-cover: body cover zone of a volume — warm "printed pages". */

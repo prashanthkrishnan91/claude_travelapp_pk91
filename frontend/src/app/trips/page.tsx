@@ -381,7 +381,7 @@ function TripSection({ title, trips, onEdit, onDelete, past = false, dense = fal
       <div
         className={
           dense
-            ? "grid grid-cols-1 gap-5"
+            ? "trips-volume-grid"
             : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
         }
         data-testid="journey-card-grid"
