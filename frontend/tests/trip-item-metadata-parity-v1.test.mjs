@@ -82,8 +82,12 @@ test("extractor never fabricates: skips undefined/null values", () => {
 });
 
 test("hasRouteableCoordinates requires real finite lat AND lng numbers", () => {
-  assert.match(metadataSrc, /Number\.isFinite\(lat\)/, "lat must be checked with Number.isFinite");
-  assert.match(metadataSrc, /Number\.isFinite\(lng\)/, "lng must be checked with Number.isFinite");
+  assert.match(metadataSrc, /Number\.isFinite\(value\)/, "coords must be checked with Number.isFinite");
+  assert.match(
+    metadataSrc,
+    /readCanonicalLat\(source\) !== undefined && readCanonicalLng\(source\) !== undefined/,
+    "must require both lat and lng",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -229,9 +233,169 @@ test("extractor does not fabricate maps links or place ids", () => {
 });
 
 test("extractor does not geocode plain addresses into coordinates", () => {
+  // No live provider/geocoding calls (no fetch/await against external endpoints).
   assert.doesNotMatch(
     metadataSrc,
-    /geocode|geocoding|fetch\(|fetch `/i,
+    /fetch\(|fetch\s+`|await fetch|http\.get|https\.get/i,
     "extractor must be a pure local mapper — no provider/geocoding calls",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 9. v1.1 — Build attraction/restaurant add path forwards canonical metadata.
+// ---------------------------------------------------------------------------
+
+test("v1.1 — addAttractionToDay accepts additionalDetails param", () => {
+  assert.match(
+    apiSrc,
+    /addAttractionToDay[\s\S]{0,500}additionalDetails\?\:\s*Record<string,\s*unknown>/,
+    "addAttractionToDay must accept additionalDetails for canonical metadata parity",
+  );
+});
+
+test("v1.1 — addRestaurantToDay accepts additionalDetails param", () => {
+  assert.match(
+    apiSrc,
+    /addRestaurantToDay[\s\S]{0,500}additionalDetails\?\:\s*Record<string,\s*unknown>/,
+    "addRestaurantToDay must accept additionalDetails for canonical metadata parity",
+  );
+});
+
+test("v1.1 — add*ToDay merges additionalDetails without overwriting non-null base", () => {
+  // The merge rule must fill base nulls/empties but never clobber non-null base values.
+  assert.match(
+    apiSrc,
+    /if \(v == null\) continue/,
+    "additionalDetails null/undefined entries must be skipped (no fabrication)",
+  );
+  assert.match(
+    apiSrc,
+    /existing == null \|\| existing === ""/,
+    "merge must only fill when base field is null/empty",
+  );
+});
+
+test("v1.1 — TripBuilder builds candidateSourceItemsRef map from persisted items", () => {
+  assert.match(
+    tripBuilderSrc,
+    /candidateSourceItemsRef/,
+    "TripBuilder must keep a ref of persisted source items for canonical lookup",
+  );
+  assert.match(
+    tripBuilderSrc,
+    /sourceMap\.set\(placeId, it\)/,
+    "source map must be keyed by placeId (so search-result placeId lookup works)",
+  );
+  assert.match(
+    tripBuilderSrc,
+    /sourceMap\.set\(it\.id, it\)/,
+    "source map must also be keyed by ItineraryItem id (fallback)",
+  );
+});
+
+test("v1.1 — handleAddAttractionToItinerary forwards canonical metadata into add", () => {
+  const idx = tripBuilderSrc.indexOf("handleAddAttractionToItinerary");
+  assert.ok(idx > -1, "handleAddAttractionToItinerary must exist");
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(
+    slice,
+    /candidateSourceItemsRef\.current\.get\(attraction\.id\)/,
+    "handler must look up the original persisted candidate by id",
+  );
+  assert.match(
+    slice,
+    /extractRouteableTripItemMetadata/,
+    "handler must call the canonical extractor on the source item details",
+  );
+  assert.match(
+    slice,
+    /addAttractionToDay\([^)]+,\s*additionalDetails\)/,
+    "handler must pass additionalDetails into addAttractionToDay",
+  );
+});
+
+test("v1.1 — handleAddRestaurantToItinerary forwards canonical metadata into add", () => {
+  const idx = tripBuilderSrc.indexOf("handleAddRestaurantToItinerary");
+  assert.ok(idx > -1, "handleAddRestaurantToItinerary must exist");
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(
+    slice,
+    /candidateSourceItemsRef\.current\.get\(restaurant\.id\)/,
+    "handler must look up the original persisted candidate by id",
+  );
+  assert.match(
+    slice,
+    /extractRouteableTripItemMetadata/,
+    "handler must call the canonical extractor on the source item details",
+  );
+  assert.match(
+    slice,
+    /addRestaurantToDay\([^)]+,\s*additionalDetails\)/,
+    "handler must pass additionalDetails into addRestaurantToDay",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 10. v1.1 — Canonical extractor handles alternate coordinate keys.
+// ---------------------------------------------------------------------------
+
+test("readCanonicalLat handles latitude alias", () => {
+  assert.match(metadataSrc, /readNumber\(source\.lat\) \?\? readNumber\(source\.latitude\)/);
+});
+
+test("readCanonicalLng handles longitude and lon aliases", () => {
+  assert.match(
+    metadataSrc,
+    /readNumber\(source\.lng\) \?\? readNumber\(source\.longitude\) \?\? readNumber\(source\.lon\)/,
+  );
+});
+
+test("canonical coordinate reader checks nested coordinates/geo/location/coords/position", () => {
+  for (const k of ["coordinates", "geo", "location", "coords", "position"]) {
+    assert.match(metadataSrc, new RegExp(`"${k}"`), `nested key '${k}' must be checked`);
+  }
+});
+
+test("hasRouteableCoordinates is true only when both canonical lat AND lng resolve", () => {
+  assert.match(
+    metadataSrc,
+    /readCanonicalLat\(source\) !== undefined && readCanonicalLng\(source\) !== undefined/,
+    "hasRouteableCoordinates must require both",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 11. v1.1 — tripCandidates uses canonical reader (no alternate-key drop).
+// ---------------------------------------------------------------------------
+
+test("tripCandidates.itemToAttraction/itemToRestaurant use canonical coordinate readers", () => {
+  const candSrc = readFileSync(
+    new URL("../src/lib/tripCandidates.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(candSrc, /readCanonicalLat\(d\)/, "itemToAttraction/Restaurant must read lat via canonical helper");
+  assert.match(candSrc, /readCanonicalLng\(d\)/, "itemToAttraction/Restaurant must read lng via canonical helper");
+});
+
+// ---------------------------------------------------------------------------
+// 12. v1.1 — No fabrication: alternate-key resolution does not invent coords.
+// ---------------------------------------------------------------------------
+
+test("v1.1 — readCanonical{Lat,Lng} return undefined when no real number is present", () => {
+  // Source must not synthesize a 0 or a default coordinate.
+  assert.doesNotMatch(metadataSrc, /lat:\s*0\b|lng:\s*0\b/, "must not default coords to 0");
+  assert.match(metadataSrc, /Number\.isFinite\(value\)/, "must require finite number");
+});
+
+// ---------------------------------------------------------------------------
+// 13. v1.1 — Honest fallback still triggers when BOTH coords are missing.
+// ---------------------------------------------------------------------------
+
+test("extractRouteableTripItemMetadata only emits lat/lng when both are real numbers", () => {
+  // Implementation: out.lat and out.lng are set only when both are defined.
+  assert.match(
+    metadataSrc,
+    /if \(lat !== undefined && lng !== undefined\)/,
+    "extractor must only emit lat/lng pair when both resolve",
   );
 });
