@@ -78,6 +78,7 @@ import {
 } from "@/lib/api";
 import { deriveHotelStayDisplay, readHotelCheckOut } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
+import { extractRouteableTripItemMetadata } from "@/lib/tripItemMetadata";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
@@ -1622,12 +1623,20 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         const seededItem: ItineraryItem = { ...item, details: seededDetails as ItineraryItem["details"] };
         newItem = await addHotelToDay(tripId, targetDay.id, seededItem, targetDay.items.length);
       } else {
+        // Trip Item Metadata Parity v1: preserve canonical routeable metadata
+        // (lat/lng/address/placeId/category/rating/maps link/...) at the
+        // source-to-trip-item boundary so Build/Add-to-Day routeable places
+        // get the same travel-hint-capable card UX as Concierge-added places.
+        const routeable = extractRouteableTripItemMetadata(
+          (item.details ?? {}) as Record<string, unknown>,
+        );
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,
           title: item.title,
           description: item.description ?? undefined,
           location: item.location ?? undefined,
           position: targetDay.items.length,
+          ...(Object.keys(routeable).length > 0 ? { details: routeable } : {}),
         });
       }
 

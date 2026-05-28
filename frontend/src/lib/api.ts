@@ -351,14 +351,29 @@ export async function createItem(
     location?: string;
     position: number;
     bookingOptions?: BookingOption[];
+    /**
+     * Canonical routeable metadata to preserve at the source-to-trip-item
+     * boundary (lat/lng/address/placeId/category/rating/maps link/...).
+     * See `extractRouteableTripItemMetadata` in `src/lib/tripItemMetadata.ts`.
+     */
+    details?: Record<string, unknown>;
   }
 ): Promise<ItineraryItem> {
-  const { bookingOptions, ...rest } = data;
+  const { bookingOptions, details: routeableDetails, ...rest } = data;
+  const hasRouteable = routeableDetails && Object.keys(routeableDetails).length > 0;
+  const hasBooking = !!bookingOptions?.length;
+  const mergedDetails: Record<string, unknown> | undefined =
+    hasRouteable || hasBooking
+      ? {
+          ...(hasRouteable ? routeableDetails : {}),
+          ...(hasBooking ? { bookingOptions } : {}),
+        }
+      : undefined;
   const payload = toSnake({
     ...rest,
     tripId,
     dayId,
-    ...(bookingOptions?.length ? { details: { bookingOptions } } : {}),
+    ...(mergedDetails ? { details: mergedDetails } : {}),
   });
   return apiFetch<ItineraryItem>(
     `/itinerary/${tripId}/days/${dayId}/items`,
