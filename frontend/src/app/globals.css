@@ -9540,6 +9540,40 @@
     border-bottom: 1px solid color-mix(in srgb, var(--ds-hairline) 70%, transparent);
   }
 
+  /* .jd-idea-card: left accent border communicates vertical type at a glance.
+     Compose on top of folio-paper-item. Color classes follow. */
+  .jd-idea-card { border-left-width: 3px; }
+  .jd-idea-card--activity { border-left-color: var(--ds-marine-ink); }
+  .jd-idea-card--meal     { border-left-color: var(--ds-ember-brass); }
+  .jd-idea-card--hotel    { border-left-color: var(--ds-verified-sage); }
+  .jd-idea-card--flight   { border-left-color: color-mix(in srgb, var(--ds-caution-amber) 80%, var(--ds-folio-ink-mist)); }
+
+  /* .jd-idea-place-zone: recessed linen docking zone for day-select + Add-to-Day.
+     Negative margins extend to card edges; parent overflow:hidden clips corners. */
+  .jd-idea-place-zone {
+    margin: 8px -12px -12px;
+    padding: 8px 12px 12px;
+    background: var(--ds-linen);
+    border-top: 1px solid var(--ds-hairline);
+  }
+
+  /* .jd-idea-note-preview: compact italic excerpt when the note editor is closed.
+     Brass left hairline mirrors the private-marginalia tone used in the IdeasTray. */
+  .jd-idea-note-preview {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 6px;
+    padding: 4px 8px 4px 9px;
+    border-left: 2px solid color-mix(in srgb, var(--ds-ember-brass) 50%, var(--ds-hairline));
+    font-size: 11px;
+    font-style: italic;
+    line-height: 1.5;
+    color: var(--ds-folio-ink-soft);
+    border-radius: 0 3px 3px 0;
+  }
+
   /* ── Journey Desk v2C — real Trip Lens pin map ─────────────────────────────
      A premium "folded atlas" surface: warm paper frame around a muted OSM tile
      layer, paper-styled Leaflet controls, and brass-rimmed marine stamps. Pins

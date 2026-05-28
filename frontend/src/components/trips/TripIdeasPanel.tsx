@@ -201,7 +201,8 @@ function IdeaCard({
   }
 
   return (
-    <FolioCard className="folio-paper-item p-3" data-testid="trip-idea-card">
+    <FolioCard className={`folio-paper-item jd-idea-card jd-idea-card--${item.itemType} p-3`} data-testid="trip-idea-card">
+      {/* Identity row: title, category, location, remove */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-ds-folio-ink">{item.title}</p>
@@ -226,8 +227,18 @@ function IdeaCard({
       </div>
 
       {/* Priority / status row */}
-      <div className="mt-2.5" data-testid="ideas-tab-status-chips">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">Priority</p>
+      <div className="mt-2.5 border-t border-ds-hairline/50 pt-2.5" data-testid="ideas-tab-status-chips">
+        <div className="flex items-center justify-between gap-1 mb-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">Priority</p>
+          <button
+            type="button"
+            onClick={() => setNoteOpen((v) => !v)}
+            className="inline-flex items-center gap-1 min-h-[32px] px-1.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
+          >
+            <Pencil className="h-3 w-3" aria-hidden="true" />
+            {note ? "Edit note" : "Add note"}
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           {STATUS_OPTIONS.map((opt) => (
             <button
@@ -248,16 +259,13 @@ function IdeaCard({
               {opt.label}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setNoteOpen((v) => !v)}
-            className="ml-auto inline-flex items-center gap-1 min-h-[44px] px-1.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2 rounded"
-          >
-            <Pencil className="h-3 w-3" aria-hidden="true" />
-            {note ? "Edit note" : "Add note"}
-          </button>
         </div>
       </div>
+
+      {/* Note preview (read-only excerpt when editor is closed) */}
+      {!noteOpen && note && (
+        <p className="jd-idea-note-preview">{note}</p>
+      )}
 
       {/* Inline note textarea */}
       {noteOpen && (
@@ -271,13 +279,14 @@ function IdeaCard({
         />
       )}
 
+      {/* Placement zone — day select + Add to Day */}
       {days.length > 0 && (
-        <div className="mt-2.5 flex items-center gap-1.5">
+        <div className="jd-idea-place-zone flex items-center gap-1.5">
           <select
             value={selectedDay}
             onChange={(e) => setSelectedDay(e.target.value)}
             disabled={assigning}
-            className="flex-1 min-h-[44px] rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1.5 text-xs text-ds-folio-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
+            className="flex-1 min-h-[40px] rounded-lg border border-ds-hairline bg-ds-bone px-2 py-1.5 text-xs text-ds-folio-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {days.map((day) => (
               <option key={day.id} value={day.id}>
@@ -289,8 +298,7 @@ function IdeaCard({
             type="button"
             onClick={() => onAssign(selectedDay)}
             disabled={assigning || !selectedDay}
-            className="flex-shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-lg px-2.5 text-xs font-medium text-ds-accent ring-1 ring-ds-accent/40 hover:ring-ds-accent transition disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
-            style={{ backgroundColor: "var(--ds-accent-subtle)" }}
+            className="flex-shrink-0 min-h-[40px] inline-flex items-center justify-center rounded-lg px-3.5 text-xs font-semibold bg-ds-marine-ink text-ds-paper hover:bg-ds-marine-soft transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-accent focus-visible:outline-offset-2"
           >
             {assigning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add to Day"}
           </button>
@@ -514,7 +522,7 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {groupIdeasByVertical(filteredAndSorted).map((group) => {
+                  {groupIdeasByVertical(filteredAndSorted).map((group, groupIdx) => {
                     const expanded = expandedGroups[group.key] ?? false;
                     const visible = expanded
                       ? group.items
@@ -522,10 +530,14 @@ export function TripIdeasPanel({ tripId, days, refreshKey, onIdeaAssigned }: Pro
                     const overflow = group.items.length - visible.length;
                     return (
                       <div key={group.key} data-vertical={group.key}>
-                        <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-ds-folio-ink-mist">
+                        <div className={`mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.09em] text-ds-folio-ink-mist ${groupIdx > 0 ? "pt-2 border-t border-ds-hairline" : ""}`}>
                           {group.icon}
-                          {group.label}
-                          <span className="text-ds-folio-ink-mist opacity-70">({group.items.length})</span>
+                          <span>{group.label}</span>
+                          <span
+                            className="inline-flex items-center justify-center rounded-full border border-ds-hairline px-1.5 text-[9px] font-semibold text-ds-folio-ink-mist"
+                          >
+                            {group.items.length}
+                          </span>
                         </div>
                         <div className="space-y-2">
                           {visible.map((idea) => (
