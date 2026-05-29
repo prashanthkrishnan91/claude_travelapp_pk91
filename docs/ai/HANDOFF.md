@@ -1,6 +1,10 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-28 (Trip Item Metadata Parity v1 + v1.1 preview-fix)
+Last updated: 2026-05-28 (Trip Item Metadata Parity v1 + v1.1 + v1.2 day-plan backend fix)
+
+### Trip Item Metadata Parity v1.2 — day-plan backend response shape (PR #499 follow-up)
+
+**Field-level production-DB trace** of the Vercel preview Miami case identified the actual failure seam. Direct Supabase query of `itinerary_items` for the four preview titles showed `details.lat` and `details.lng` were `null` on Torch of Friendship, Miami Skyline View, and Phillip & Patricia Frost Museum of Science — with no alternate keys (no `latitude`, `coordinates`, `geo`) and no `place_id`. The three rows were all created within 333ms of each other and had `source: null` (not "Google Places"), indicating they came in through `/plan/day`, not Concierge or Build/CandidatePanel. **Root cause:** `backend/app/models/plan.py` defined `PlannedAttraction` and `PlannedRestaurant` with no `lat`/`lng` fields, so `/plan/day` silently dropped coordinates from the upstream `AttractionResult` / `ClusterPlaceInput` even though those provider rows carried real coordinates. Frontend `handlePlanAddAttraction` then called `addAttractionToDay` with `attraction.lat = undefined`, persisting `lat: null`, and `computeAdjacentHints` correctly emitted the honest fallback. **Fix:** `PlannedAttraction` and `PlannedRestaurant` gain `lat: Optional[float] = None` and `lng: Optional[float] = None`. `/plan/day` forwards `lat=a.lat`/`lng=a.lng` on the AttractionResult path and `lat=lunch.lat`/etc on lunch/dinner. Cluster-path constructors use `if a.lat else None` to treat the ClusterPlaceInput 0.0 default as missing (never fabricates a (0,0) coordinate). Fallback ClusterPlaceInput construction forwards `r.lat`/`r.lng` only when present. New `backend/tests/test_trip_item_metadata_parity_day_plan.py` (9 assertions). Frontend tests/trip-item-metadata-parity-v1.test.mjs (31) + travel-time-hints suite still green (58/58). No SQL. No new providers. No fabrication.
 
 ## Next planned direction
 

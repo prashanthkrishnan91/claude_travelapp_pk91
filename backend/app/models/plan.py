@@ -40,6 +40,13 @@ class PlannedAttraction(BaseModel):
     price_level: Optional[int] = None
     opening_hours: Optional[str] = None
     booking_url: Optional[str] = None
+    # Trip Item Metadata Parity v1.2: forward routeable coordinates from the
+    # underlying AttractionResult / ClusterPlaceInput so that day-plan-accepted
+    # places carry lat/lng into the persisted itinerary item. Without these,
+    # `addAttractionToDay` writes `lat: null` and `computeAdjacentHints` emits
+    # the honest fallback even when the source actually has coordinates.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class PlannedRestaurant(BaseModel):
@@ -55,6 +62,9 @@ class PlannedRestaurant(BaseModel):
     price_level: Optional[int] = None
     opening_hours: Optional[str] = None
     booking_url: Optional[str] = None
+    # See PlannedAttraction.lat/lng — same routeable-metadata-parity contract.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class DayPlanResponse(BaseModel):
