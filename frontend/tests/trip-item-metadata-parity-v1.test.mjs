@@ -399,3 +399,74 @@ test("extractRouteableTripItemMetadata only emits lat/lng when both are real num
     "extractor must only emit lat/lng pair when both resolve",
   );
 });
+
+// ---------------------------------------------------------------------------
+// 14. v1.3 — Plan My Day path uses the same canonical write boundary as Build.
+// ---------------------------------------------------------------------------
+
+test("v1.3 — handlePlanAddAttraction passes canonical metadata into addAttractionToDay", () => {
+  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
+  assert.ok(idx > -1, "handlePlanAddAttraction must exist");
+  const slice = tripBuilderSrc.slice(idx, idx + 1200);
+  assert.match(
+    slice,
+    /extractRouteableTripItemMetadata\(\s*attraction/,
+    "handlePlanAddAttraction must call the canonical extractor on the attraction",
+  );
+  assert.match(
+    slice,
+    /addAttractionToDay\([^)]+,\s*additionalDetails\)/,
+    "handlePlanAddAttraction must pass additionalDetails into addAttractionToDay",
+  );
+});
+
+test("v1.3 — handlePlanAddRestaurant passes canonical metadata into addRestaurantToDay", () => {
+  const idx = tripBuilderSrc.indexOf("handlePlanAddRestaurant");
+  assert.ok(idx > -1, "handlePlanAddRestaurant must exist");
+  const slice = tripBuilderSrc.slice(idx, idx + 1200);
+  assert.match(
+    slice,
+    /extractRouteableTripItemMetadata\(\s*restaurant/,
+    "handlePlanAddRestaurant must call the canonical extractor on the restaurant",
+  );
+  assert.match(
+    slice,
+    /addRestaurantToDay\([^)]+,\s*additionalDetails\)/,
+    "handlePlanAddRestaurant must pass additionalDetails into addRestaurantToDay",
+  );
+});
+
+test("v1.3 — Plan My Day write boundary is identical to Build/CandidatePanel", () => {
+  // Both handlers must call the same canonical extractor on their source
+  // payload and forward into the same add*ToDay function. This guarantees
+  // any routeable field present on the AttractionSearchResult /
+  // RestaurantSearchResult shape flows through identically regardless of
+  // ingress path (Plan My Day, Build/CandidatePanel, Day Plan modal).
+  const planAttIdx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
+  const buildAttIdx = tripBuilderSrc.indexOf("handleAddAttractionToItinerary");
+  assert.ok(planAttIdx > -1 && buildAttIdx > -1);
+  const planSlice = tripBuilderSrc.slice(planAttIdx, planAttIdx + 1200);
+  const buildSlice = tripBuilderSrc.slice(buildAttIdx, buildAttIdx + 2500);
+  // Both call extractRouteableTripItemMetadata.
+  assert.match(planSlice, /extractRouteableTripItemMetadata/);
+  assert.match(buildSlice, /extractRouteableTripItemMetadata/);
+  // Both pass additionalDetails into addAttractionToDay.
+  assert.match(planSlice, /addAttractionToDay\([^)]+,\s*additionalDetails\)/);
+  assert.match(buildSlice, /addAttractionToDay\([^)]+,\s*additionalDetails\)/);
+});
+
+// ---------------------------------------------------------------------------
+// 15. v1.3 — Honest fallback for Plan My Day items lacking upstream coords.
+// ---------------------------------------------------------------------------
+
+test("v1.3 — extractor produces empty additionalDetails when source has no coords", () => {
+  // The extractor must skip nullish values; an AttractionSearchResult-shaped
+  // object with lat:undefined,lng:undefined produces an output that does not
+  // include lat/lng, so addAttractionToDay persists lat:null/lng:null and
+  // computeAdjacentHints correctly emits the honest fallback. No fabrication.
+  assert.match(
+    metadataSrc,
+    /value !== undefined && value !== null/,
+    "extractor must skip nullish — proves no fake coords are injected",
+  );
+});

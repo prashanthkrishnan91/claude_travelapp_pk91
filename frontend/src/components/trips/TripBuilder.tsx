@@ -1946,7 +1946,18 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction);
+    // Trip Item Metadata Parity v1.3: Plan My Day uses the same canonical
+    // write boundary as Build/CandidatePanel (v1.1). Any routeable metadata
+    // on the AttractionSearchResult (lat/lng under canonical or alternate
+    // keys; placeId/googleMapsUri if backend supplies them later) flows
+    // through unchanged. Never fabricates: when the upstream `/plan/day`
+    // response carries no coordinates, `additionalDetails` simply omits them
+    // and the placed item correctly shows the honest "Add location details"
+    // fallback.
+    const additionalDetails = extractRouteableTripItemMetadata(
+      attraction as unknown as Record<string, unknown>,
+    );
+    const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
     );
@@ -1954,7 +1965,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddRestaurant = useCallback(async (restaurant: RestaurantSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant);
+    // See handlePlanAddAttraction — same canonical write-boundary contract.
+    const additionalDetails = extractRouteableTripItemMetadata(
+      restaurant as unknown as Record<string, unknown>,
+    );
+    const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
     );

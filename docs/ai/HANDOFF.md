@@ -1,6 +1,11 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-28 (Trip Item Metadata Parity v1 + v1.1 + v1.2 day-plan backend fix)
+Last updated: 2026-05-29 (Trip Item Metadata Parity v1.3 — Plan My Day canonical write boundary)
+
+### Trip Item Metadata Parity v1.3 — Plan My Day canonical write boundary (PR #499 follow-up)
+
+Field-level production-DB inspection after v1.2 deploy confirmed the backend `/plan/day` lat/lng forwarding is live: a Plan My Day-added Maurice A. Ferré Park row has `details.lat = 25.7843` while a Plan My Day-added Miami Walk of Fame row added 47 seconds later on the same trip has `details.lat = null`. Both rows came through the same flow; the difference is that the upstream Google Places API response for Walk of Fame lacks `location.latitude` — a genuine upstream data gap, **not** a frontend bug. v1.3 patch wires `handlePlanAddAttraction` / `handlePlanAddRestaurant` through `extractRouteableTripItemMetadata(...)` and passes the result as `additionalDetails` to `addAttractionToDay` / `addRestaurantToDay` — identical write-boundary contract to the v1.1 Build/CandidatePanel handlers. Any routeable field the source carries flows through; nothing is fabricated for items that genuinely lack coordinates upstream. Tests grow 31 → 35 (all pass); travel-time-hints suite still green; 62/62 frontend tests pass. No SQL. No new providers.
+
 
 ### Trip Item Metadata Parity v1.2 — day-plan backend response shape (PR #499 follow-up)
 
