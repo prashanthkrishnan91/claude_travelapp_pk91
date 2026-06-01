@@ -1,6 +1,10 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-01 (Trip Item Metadata Parity v1.4 — Plan My Day persisted-candidate source recovery)
+Last updated: 2026-06-01 (Trip Item Metadata Parity v1.4 reverted — restored last-known-good Build behavior, Plan My Day documented as honest fallback when upstream lacks coords)
+
+### Trip Item Metadata Parity v1.4 REVERTED — restored Build/CandidatePanel last-known-good (PR #499 follow-up)
+
+User reported a Build/Add-to-Day regression in preview after v1.4 deploy: Lummus Park no longer shows a hint in the visible sequence. Production-DB inspection confirmed all three Build-added items (Lummus, Bayfront, Maurice) still have real lat/lng. The visible missing hint is on the Lummus→Frost connector — Frost Museum has `lat=null` from the Plan My Day path — which is correct honest fallback for that pair, NOT a Lummus regression. Per user directive "Stop broad metadata/route-hint changes. First restore the last known-good Build/Add-to-Day route-hint behavior, then isolate Plan My Day", reverted v1.4 candidate-recovery additions: `gp-{placeId}` keying, `title:{normalized}` keying, three-step lookup chain, `{...fromShape,...fromSource}` merge in `handlePlanAddAttraction`/`handlePlanAddRestaurant`. Restored to v1.3 state. Added 3 regression guards: gp-prefix and title keying must not be re-introduced; Plan My Day handler must NOT read candidateSourceItemsRef (v1.4 risk); Build handler still reads candidateSourceItemsRef.current.get(attraction.id) (v1.1 contract preserved). Plan My Day for items where `/plan/day` backend lacks coords now stays at honest fallback — documented limitation, not a fix claim. 65/65 frontend tests pass.
 
 ### Trip Item Metadata Parity v1.4 — Plan My Day persisted-candidate recovery (PR #499 follow-up)
 

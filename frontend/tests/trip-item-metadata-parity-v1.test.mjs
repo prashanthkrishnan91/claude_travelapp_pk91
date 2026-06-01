@@ -472,71 +472,45 @@ test("v1.3 — extractor produces empty additionalDetails when source has no coo
 });
 
 // ---------------------------------------------------------------------------
-// 16. v1.4 — Plan My Day recovers coords from persisted candidate row.
+// 16. Regression guards — v1.4 reverted; Build/CandidatePanel must stay intact.
 // ---------------------------------------------------------------------------
 
-test("v1.4 — candidateSourceItemsRef keys include the gp-{placeId} form", () => {
-  assert.match(
+test("regression guard — candidateSourceItemsRef stays simple (placeId + item.id only)", () => {
+  // v1.4 added gp-prefix + title-fallback keying and a multi-step Plan My Day
+  // source-recovery merge. That patch was reverted because the user reported
+  // a Build/Add-to-Day regression in preview after deploy. Keep the source-map
+  // build minimal: only persisted placeId and ItineraryItem.id keys are
+  // permitted. This guard prevents the v1.4 keying from sneaking back in.
+  assert.doesNotMatch(
     tripBuilderSrc,
-    /sourceMap\.set\(`gp-\$\{placeId\}`,\s*it\)/,
-    "source map must be keyed by gp-{placeId} so /plan/day's id=gp-... lookups hit",
+    /sourceMap\.set\(`gp-\$\{placeId\}`,/,
+    "v1.4 gp-prefix keying must NOT be re-introduced (Build regression risk)",
+  );
+  assert.doesNotMatch(
+    tripBuilderSrc,
+    /sourceMap\.set\(`title:/,
+    "v1.4 title keying must NOT be re-introduced (Build regression risk)",
   );
 });
 
-test("v1.4 — candidateSourceItemsRef keys include normalized title", () => {
-  assert.match(
-    tripBuilderSrc,
-    /sourceMap\.set\(`title:\$\{normTitle\(it\.title\)\}`,\s*it\)/,
-    "source map must be keyed by normalized title as a last-resort lookup",
-  );
-});
-
-test("v1.4 — handlePlanAddAttraction tries gp- prefix strip + title fallback", () => {
+test("regression guard — handlePlanAddAttraction does not do persisted-candidate lookup", () => {
   const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
   assert.ok(idx > -1);
-  const slice = tripBuilderSrc.slice(idx, idx + 2500);
-  assert.match(slice, /sourceMap\.get\(attraction\.id\)/, "primary lookup by id");
-  assert.match(
+  const slice = tripBuilderSrc.slice(idx, idx + 1500);
+  assert.doesNotMatch(
     slice,
-    /sourceMap\.get\(attraction\.id\?\.replace\(\/\^gp-\/,\s*""\)\)/,
-    "must strip gp- prefix before secondary lookup",
+    /candidateSourceItemsRef\.current/,
+    "handlePlanAddAttraction must NOT read candidateSourceItemsRef (v1.4 regressed Build)",
   );
-  assert.match(slice, /sourceMap\.get\(titleKey\)/, "title fallback lookup");
 });
 
-test("v1.4 — handlePlanAddRestaurant uses the same recovery chain", () => {
-  const idx = tripBuilderSrc.indexOf("handlePlanAddRestaurant");
+test("regression guard — Build/CandidatePanel handler still reads candidateSourceItemsRef", () => {
+  const idx = tripBuilderSrc.indexOf("handleAddAttractionToItinerary");
   assert.ok(idx > -1);
   const slice = tripBuilderSrc.slice(idx, idx + 2500);
-  assert.match(slice, /sourceMap\.get\(restaurant\.id\)/);
-  assert.match(slice, /sourceMap\.get\(restaurant\.id\?\.replace\(\/\^gp-\/,\s*""\)\)/);
-  assert.match(slice, /sourceMap\.get\(titleKey\)/);
-});
-
-test("v1.4 — Plan My Day prefers persisted-source coords over lossy shape", () => {
-  // Routeable metadata recovered from the persisted candidate row must
-  // override the lossy AttractionSearchResult shape when both are present —
-  // because the persisted row carries placeId/googleMapsUri/canonical coords
-  // that the search-result shape cannot. Spread order: shape first, source last.
-  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
-  const slice = tripBuilderSrc.slice(idx, idx + 2500);
   assert.match(
     slice,
-    /\{\s*\.\.\.fromShape,\s*\.\.\.fromSource\s*\}/,
-    "merge must spread fromSource LAST so persisted coords win over lossy-shape coords",
+    /candidateSourceItemsRef\.current\.get\(attraction\.id\)/,
+    "Build path must keep its v1.1 source-lookup (proven working: Bayfront, Maurice, Lummus)",
   );
-});
-
-test("v1.4 — no fabrication: lookup returns no metadata when no candidate exists", () => {
-  // When sourceMap.get returns undefined and the shape has no coords, the
-  // resulting additionalDetails is empty — addAttractionToDay persists
-  // lat:null/lng:null and the honest fallback shows.
-  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
-  const slice = tripBuilderSrc.slice(idx, idx + 2500);
-  assert.match(
-    slice,
-    /sourceItem\s*\?\s*extractRouteableTripItemMetadata\(/,
-    "extractor only runs when sourceItem exists — otherwise fromSource is {}",
-  );
-  assert.match(slice, /:\s*\{\}/, "fromSource defaults to {} when no candidate found");
 });
