@@ -102,6 +102,8 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
                     ai_score=a.ai_score,
                     tags=a.tags,
                     booking_url=a.booking_url or "",
+                    lat=a.lat,
+                    lng=a.lng,
                 )
                 for a in attractions_slice
             ]
@@ -127,6 +129,8 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
             price_level=lunch.price_level,
             opening_hours=lunch.opening_hours,
             booking_url=lunch.booking_url,
+            lat=lunch.lat,
+            lng=lunch.lng,
         ),
         dinner=PlannedRestaurant(
             id=dinner.id,
@@ -141,6 +145,8 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
             price_level=dinner.price_level,
             opening_hours=dinner.opening_hours,
             booking_url=dinner.booking_url,
+            lat=dinner.lat,
+            lng=dinner.lng,
         ),
     )
 
@@ -180,6 +186,11 @@ def _plan_from_cluster(
                 ai_score=r.ai_score,
                 tags=r.tags,
                 booking_url=r.booking_url or "",
+                # Trip Item Metadata Parity v1.2: never default coords to 0.0
+                # (which would write a fake (0,0) into the itinerary); pass the
+                # real RestaurantResult coords only when present.
+                **({"lat": r.lat} if r.lat is not None else {}),
+                **({"lng": r.lng} if r.lng is not None else {}),
             )
             for r in sorted(fallback, key=lambda r: r.ai_score or 0, reverse=True)[:2]
         ]
@@ -207,6 +218,10 @@ def _plan_from_cluster(
                 ai_score=a.ai_score,
                 tags=a.tags,
                 booking_url=a.booking_url or "",
+                # ClusterPlaceInput defaults lat/lng to 0.0; treat 0.0 as
+                # missing to avoid writing a fake (0,0) coordinate.
+                lat=(a.lat if a.lat else None),
+                lng=(a.lng if a.lng else None),
             )
             for a in cluster_attractions
         ],
@@ -220,6 +235,8 @@ def _plan_from_cluster(
             ai_score=lunch.ai_score,
             tags=lunch.tags,
             booking_url=lunch.booking_url or "",
+            lat=(lunch.lat if lunch.lat else None),
+            lng=(lunch.lng if lunch.lng else None),
         ),
         dinner=PlannedRestaurant(
             id=dinner.id,
@@ -231,5 +248,7 @@ def _plan_from_cluster(
             ai_score=dinner.ai_score,
             tags=dinner.tags,
             booking_url=dinner.booking_url or "",
+            lat=(dinner.lat if dinner.lat else None),
+            lng=(dinner.lng if dinner.lng else None),
         ),
     )

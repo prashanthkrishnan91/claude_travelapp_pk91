@@ -78,6 +78,7 @@ import {
 } from "@/lib/api";
 import { deriveHotelStayDisplay, readHotelCheckOut } from "@/lib/hotelStaySpans";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
+import { extractRouteableTripItemMetadata } from "@/lib/tripItemMetadata";
 import { SearchResultCard } from "./SearchResultCard";
 import { ItineraryDayColumn } from "./ItineraryDayColumn";
 import { ItineraryItemCard } from "./ItineraryItemCard";
@@ -1281,6 +1282,14 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [candidateFlights,     setCandidateFlights]     = useState<ItineraryItem[]>([]);
   const [candidateHotels,      setCandidateHotels]      = useState<ItineraryItem[]>([]);
   const [candidateAttractions, setCandidateAttractions] = useState<AttractionSearchResult[]>([]);
+  /**
+   * Trip Item Metadata Parity v1.1: keep the raw persisted ItineraryItem rows
+   * alongside the lossy AttractionSearchResult/RestaurantSearchResult shapes
+   * so the add-to-day handlers can recover canonical routeable metadata
+   * (placeId, googleMapsUri, formattedAddress, alternate-key coords) that
+   * the search-result shape cannot carry. Source-only lookup; never written.
+   */
+  const candidateSourceItemsRef = useRef<Map<string, ItineraryItem>>(new Map());
   const [candidateRestaurants, setCandidateRestaurants] = useState<RestaurantSearchResult[]>([]);
   const [authSessionReady, setAuthSessionReady] = useState(false);
   const [flightPanelOpen,      setFlightPanelOpen]      = useState(true);
@@ -1448,6 +1457,25 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       setCandidateHotels(merged.hotels);
       setCandidateAttractions(merged.attractions);
       setCandidateRestaurants(merged.restaurants);
+
+      // Build a source-id → original ItineraryItem map so attraction/restaurant
+      // add handlers can recover canonical routeable metadata that the lossy
+      // search-result shape cannot carry (placeId, googleMapsUri, formattedAddress,
+      // and alternate-key coordinates persisted by older trips).
+      const sourceMap = new Map<string, ItineraryItem>();
+      for (const it of items) {
+        if (it.itemType !== "activity" && it.itemType !== "meal") continue;
+        const d = (it.details ?? {}) as Record<string, unknown>;
+        const placeId =
+          (typeof d.placeId === "string" && d.placeId) ||
+          (typeof d.place_id === "string" && (d.place_id as string)) ||
+          (typeof d.providerPlaceId === "string" && d.providerPlaceId) ||
+          (typeof d.provider_place_id === "string" && (d.provider_place_id as string)) ||
+          undefined;
+        if (placeId) sourceMap.set(placeId, it);
+        sourceMap.set(it.id, it);
+      }
+      candidateSourceItemsRef.current = sourceMap;
     })();
   }, [tripId, authSessionReady]);
 
@@ -1622,12 +1650,20 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         const seededItem: ItineraryItem = { ...item, details: seededDetails as ItineraryItem["details"] };
         newItem = await addHotelToDay(tripId, targetDay.id, seededItem, targetDay.items.length);
       } else {
+        // Trip Item Metadata Parity v1: preserve canonical routeable metadata
+        // (lat/lng/address/placeId/category/rating/maps link/...) at the
+        // source-to-trip-item boundary so Build/Add-to-Day routeable places
+        // get the same travel-hint-capable card UX as Concierge-added places.
+        const routeable = extractRouteableTripItemMetadata(
+          (item.details ?? {}) as Record<string, unknown>,
+        );
         newItem = await createItem(tripId, targetDay.id, {
           itemType: item.itemType as ItemType,
           title: item.title,
           description: item.description ?? undefined,
           location: item.location ?? undefined,
           position: targetDay.items.length,
+          ...(Object.keys(routeable).length > 0 ? { details: routeable } : {}),
         });
       }
 
@@ -1656,8 +1692,18 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
-      // addAttractionToDay sets the day_id correctly on the backend
-      const newItem = await addAttractionToDay(tripId, targetDay.id, attraction);
+      // Trip Item Metadata Parity v1.1: AttractionSearchResult is lossy — it
+      // cannot carry placeId/googleMapsUri/formattedAddress, and older candidate
+      // rows may store coords under alternate keys (`latitude`/`longitude`,
+      // nested `coordinates.lat`...). Look up the original persisted candidate
+      // ItineraryItem by attraction id (or by placeId fallback) and recover
+      // its full canonical routeable metadata before writing.
+      const sourceItem = candidateSourceItemsRef.current.get(attraction.id);
+      const additionalDetails = sourceItem
+        ? extractRouteableTripItemMetadata((sourceItem.details ?? {}) as Record<string, unknown>)
+        : extractRouteableTripItemMetadata(attraction as unknown as Record<string, unknown>);
+
+      const newItem = await addAttractionToDay(tripId, targetDay.id, attraction, additionalDetails);
 
       setDays((prev) =>
         prev.map((d) =>
@@ -1684,8 +1730,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         return;
       }
 
-      // addRestaurantToDay sets the day_id correctly on the backend
-      const newItem = await addRestaurantToDay(tripId, targetDay.id, restaurant);
+      // Trip Item Metadata Parity v1.1: see handleAddAttractionToItinerary.
+      const sourceItem = candidateSourceItemsRef.current.get(restaurant.id);
+      const additionalDetails = sourceItem
+        ? extractRouteableTripItemMetadata((sourceItem.details ?? {}) as Record<string, unknown>)
+        : extractRouteableTripItemMetadata(restaurant as unknown as Record<string, unknown>);
+
+      const newItem = await addRestaurantToDay(tripId, targetDay.id, restaurant, additionalDetails);
 
       setDays((prev) =>
         prev.map((d) =>
@@ -1895,7 +1946,16 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction);
+    // Trip Item Metadata Parity v1.3: Plan My Day uses the same canonical
+    // write boundary as Build/CandidatePanel. Any routeable metadata on the
+    // AttractionSearchResult flows through; if `/plan/day` returned no coords
+    // for this specific place (upstream Google Places data gap), the
+    // additionalDetails are empty and the placed item correctly shows the
+    // honest "Add location details" fallback. Never fabricates.
+    const additionalDetails = extractRouteableTripItemMetadata(
+      attraction as unknown as Record<string, unknown>,
+    );
+    const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
     );
@@ -1903,7 +1963,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddRestaurant = useCallback(async (restaurant: RestaurantSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant);
+    // See handlePlanAddAttraction — same canonical write-boundary contract.
+    const additionalDetails = extractRouteableTripItemMetadata(
+      restaurant as unknown as Record<string, unknown>,
+    );
+    const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
     );

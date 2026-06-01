@@ -40,6 +40,7 @@ import {
   normalizeIsoDate,
 } from "./tripDays";
 import { extractItineraryCoordinates } from "./itineraryCoordinates";
+import { readCanonicalLat, readCanonicalLng } from "./tripItemMetadata";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -351,14 +352,29 @@ export async function createItem(
     location?: string;
     position: number;
     bookingOptions?: BookingOption[];
+    /**
+     * Canonical routeable metadata to preserve at the source-to-trip-item
+     * boundary (lat/lng/address/placeId/category/rating/maps link/...).
+     * See `extractRouteableTripItemMetadata` in `src/lib/tripItemMetadata.ts`.
+     */
+    details?: Record<string, unknown>;
   }
 ): Promise<ItineraryItem> {
-  const { bookingOptions, ...rest } = data;
+  const { bookingOptions, details: routeableDetails, ...rest } = data;
+  const hasRouteable = routeableDetails && Object.keys(routeableDetails).length > 0;
+  const hasBooking = !!bookingOptions?.length;
+  const mergedDetails: Record<string, unknown> | undefined =
+    hasRouteable || hasBooking
+      ? {
+          ...(hasRouteable ? routeableDetails : {}),
+          ...(hasBooking ? { bookingOptions } : {}),
+        }
+      : undefined;
   const payload = toSnake({
     ...rest,
     tripId,
     dayId,
-    ...(bookingOptions?.length ? { details: { bookingOptions } } : {}),
+    ...(mergedDetails ? { details: mergedDetails } : {}),
   });
   return apiFetch<ItineraryItem>(
     `/itinerary/${tripId}/days/${dayId}/items`,
@@ -1282,8 +1298,8 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         aiScore,
         tags: Array.isArray(a.tags) ? (a.tags as string[]) : [],
         bookingUrl: typeof a.bookingUrl === "string" ? a.bookingUrl : typeof a.booking_url === "string" ? a.booking_url : undefined,
-        lat: typeof a.lat === "number" ? a.lat : undefined,
-        lng: typeof a.lng === "number" ? a.lng : undefined,
+        lat: readCanonicalLat(a),
+        lng: readCanonicalLng(a),
       };
     });
     const restaurants = rawRestaurants.map((r): RestaurantSearchResult | null => {
@@ -1350,8 +1366,8 @@ export async function fetchExploreSnapshot(tripId: string): Promise<ExploreSnaps
         sentiment,
         tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
         bookingUrl: typeof r.bookingUrl === "string" ? r.bookingUrl : typeof r.booking_url === "string" ? r.booking_url : undefined,
-        lat: typeof r.lat === "number" ? r.lat : undefined,
-        lng: typeof r.lng === "number" ? r.lng : undefined,
+        lat: readCanonicalLat(r),
+        lng: readCanonicalLng(r),
         providerPlaceId,
         googleMapsUri,
         placeId,
@@ -1498,30 +1514,50 @@ export async function fetchDayPlan(tripId: string, dayNumber: number): Promise<D
 export async function addAttractionToDay(
   tripId: string,
   dayId: string,
-  attraction: AttractionSearchResult
+  attraction: AttractionSearchResult,
+  /**
+   * Trip Item Metadata Parity v1.1: optional canonical routeable metadata
+   * pulled from a richer source (e.g. the persisted candidate ItineraryItem)
+   * that the lossy `AttractionSearchResult` shape cannot carry (placeId,
+   * googleMapsUri, formattedAddress, alternate-key coordinates). Filled
+   * with `extractRouteableTripItemMetadata` at the call site. Never fabricates.
+   */
+  additionalDetails?: Record<string, unknown>
 ): Promise<ItineraryItem> {
+  const baseDetails: Record<string, unknown> = {
+    name: attraction.name,
+    location: attraction.location,
+    address: attraction.address,
+    rating: attraction.rating ?? null,
+    num_reviews: attraction.numReviews ?? null,
+    ai_score: attraction.aiScore ?? null,
+    tags: attraction.tags,
+    category: attraction.category,
+    description: attraction.description,
+    opening_hours: attraction.openingHours ?? null,
+    price_level: attraction.priceLevel ?? null,
+    booking_url: attraction.bookingUrl ?? null,
+    lat: attraction.lat ?? null,
+    lng: attraction.lng ?? null,
+  };
+  if (additionalDetails) {
+    for (const [k, v] of Object.entries(additionalDetails)) {
+      // Fill canonical fields the AttractionSearchResult shape cannot carry,
+      // and fill any base field where the lossy shape resolved to null/empty.
+      if (v == null) continue;
+      const existing = baseDetails[k];
+      if (existing == null || existing === "") {
+        baseDetails[k] = v;
+      }
+    }
+  }
   const payload = {
     trip_id: tripId,
     day_id: dayId,
     item_type: "activity",
     title: attraction.name,
     location: attraction.address || attraction.location,
-    details: {
-      name: attraction.name,
-      location: attraction.location,
-      address: attraction.address,
-      rating: attraction.rating ?? null,
-      num_reviews: attraction.numReviews ?? null,
-      ai_score: attraction.aiScore ?? null,
-      tags: attraction.tags,
-      category: attraction.category,
-      description: attraction.description,
-      opening_hours: attraction.openingHours ?? null,
-      price_level: attraction.priceLevel ?? null,
-      booking_url: attraction.bookingUrl ?? null,
-      lat: attraction.lat ?? null,
-      lng: attraction.lng ?? null,
-    },
+    details: baseDetails,
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",
@@ -1533,29 +1569,41 @@ export async function addAttractionToDay(
 export async function addRestaurantToDay(
   tripId: string,
   dayId: string,
-  restaurant: RestaurantSearchResult
+  restaurant: RestaurantSearchResult,
+  /** See addAttractionToDay; same canonical-metadata-parity contract. */
+  additionalDetails?: Record<string, unknown>
 ): Promise<ItineraryItem> {
+  const baseDetails: Record<string, unknown> = {
+    name: restaurant.name,
+    cuisine: restaurant.cuisine,
+    location: restaurant.location,
+    address: restaurant.address,
+    rating: restaurant.rating ?? null,
+    num_reviews: restaurant.numReviews ?? null,
+    ai_score: restaurant.aiScore ?? null,
+    tags: restaurant.tags,
+    price_level: restaurant.priceLevel ?? null,
+    opening_hours: restaurant.openingHours ?? null,
+    booking_url: restaurant.bookingUrl ?? null,
+    lat: restaurant.lat ?? null,
+    lng: restaurant.lng ?? null,
+  };
+  if (additionalDetails) {
+    for (const [k, v] of Object.entries(additionalDetails)) {
+      if (v == null) continue;
+      const existing = baseDetails[k];
+      if (existing == null || existing === "") {
+        baseDetails[k] = v;
+      }
+    }
+  }
   const payload = {
     trip_id: tripId,
     day_id: dayId,
     item_type: "meal",
     title: restaurant.name,
     location: restaurant.address || restaurant.location,
-    details: {
-      name: restaurant.name,
-      cuisine: restaurant.cuisine,
-      location: restaurant.location,
-      address: restaurant.address,
-      rating: restaurant.rating ?? null,
-      num_reviews: restaurant.numReviews ?? null,
-      ai_score: restaurant.aiScore ?? null,
-      tags: restaurant.tags,
-      price_level: restaurant.priceLevel ?? null,
-      opening_hours: restaurant.openingHours ?? null,
-      booking_url: restaurant.bookingUrl ?? null,
-      lat: restaurant.lat ?? null,
-      lng: restaurant.lng ?? null,
-    },
+    details: baseDetails,
   };
   return apiFetch<ItineraryItem>("/itinerary/items", {
     method: "POST",

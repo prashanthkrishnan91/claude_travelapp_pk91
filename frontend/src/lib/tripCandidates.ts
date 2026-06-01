@@ -37,6 +37,7 @@ import {
   computeExploreAttractionScore,
   computeExploreRestaurantScore,
 } from "@/lib/api";
+import { readCanonicalLat, readCanonicalLng } from "@/lib/tripItemMetadata";
 
 export interface TripCandidateBuckets {
   flights: ItineraryItem[];
@@ -250,8 +251,8 @@ function itemToAttraction(item: ItineraryItem): AttractionSearchResult {
     aiScore,
     tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
     bookingUrl,
-    lat: typeof d.lat === "number" ? (d.lat as number) : undefined,
-    lng: typeof d.lng === "number" ? (d.lng as number) : undefined,
+    lat: readCanonicalLat(d),
+    lng: readCanonicalLng(d),
   };
 }
 
@@ -311,8 +312,8 @@ function itemToRestaurant(item: ItineraryItem): RestaurantSearchResult {
     bookingUrl:
       (d.bookingUrl as string | undefined) ??
       (d.booking_url as string | undefined),
-    lat: typeof d.lat === "number" ? (d.lat as number) : undefined,
-    lng: typeof d.lng === "number" ? (d.lng as number) : undefined,
+    lat: readCanonicalLat(d),
+    lng: readCanonicalLng(d),
     providerPlaceId: placeId,
     googleMapsUri: mapsUri,
     placeId,
