@@ -1539,6 +1539,12 @@ export async function addAttractionToDay(
     booking_url: attraction.bookingUrl ?? null,
     lat: attraction.lat ?? null,
     lng: attraction.lng ?? null,
+    // Plan My Day Place Resolution v1: persist canonical Google place identity
+    // when the source carries it (parity with the Concierge path). Never
+    // fabricated — null when absent.
+    place_id: attraction.placeId ?? null,
+    provider_place_id: attraction.providerPlaceId ?? null,
+    google_maps_uri: attraction.googleMapsUri ?? null,
   };
   if (additionalDetails) {
     for (const [k, v] of Object.entries(additionalDetails)) {
@@ -1587,6 +1593,11 @@ export async function addRestaurantToDay(
     booking_url: restaurant.bookingUrl ?? null,
     lat: restaurant.lat ?? null,
     lng: restaurant.lng ?? null,
+    // Plan My Day Place Resolution v1 — see addAttractionToDay; canonical
+    // Google place identity persisted when present, never fabricated.
+    place_id: restaurant.placeId ?? null,
+    provider_place_id: restaurant.providerPlaceId ?? null,
+    google_maps_uri: restaurant.googleMapsUri ?? null,
   };
   if (additionalDetails) {
     for (const [k, v] of Object.entries(additionalDetails)) {

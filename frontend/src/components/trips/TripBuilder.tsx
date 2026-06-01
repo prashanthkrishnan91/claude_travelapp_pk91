@@ -1946,12 +1946,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    // Trip Item Metadata Parity v1.3: Plan My Day uses the same canonical
-    // write boundary as Build/CandidatePanel. Any routeable metadata on the
-    // AttractionSearchResult flows through; if `/plan/day` returned no coords
-    // for this specific place (upstream Google Places data gap), the
-    // additionalDetails are empty and the placed item correctly shows the
-    // honest "Add location details" fallback. Never fabricates.
+    // Trip Item Metadata Parity v1.3 + Plan My Day Place Resolution v1: Plan My
+    // Day uses the same canonical write boundary as Build/CandidatePanel. The
+    // `/plan/day` response now resolves place-like recommendations through the
+    // Google Places details path server-side, so the AttractionSearchResult
+    // carries lat/lng + placeId + googleMapsUri whenever resolution succeeds —
+    // and the placed item is route-hint eligible with the same canonical fields
+    // as Build/Concierge. If resolution genuinely fails upstream, additionalDetails
+    // lack coordinates and the placed item keeps the honest "Add location
+    // details" fallback. Never fabricates.
     const additionalDetails = extractRouteableTripItemMetadata(
       attraction as unknown as Record<string, unknown>,
     );

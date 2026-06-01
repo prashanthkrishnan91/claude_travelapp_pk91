@@ -175,6 +175,12 @@ class AttractionResult(SearchResult):
     price_level: Optional[int] = Field(None, ge=0, le=4, description="Price level 0=free, 1=inexpensive, 2=moderate, 3=expensive, 4=very expensive")
     lat: Optional[float] = Field(None, description="Latitude coordinate")
     lng: Optional[float] = Field(None, description="Longitude coordinate")
+    # Plan My Day Place Resolution v1: canonical Google place identity so the
+    # attraction path matches RestaurantResult and day-plan-accepted attractions
+    # can carry place_id / google_maps_uri (and resolve missing coords).
+    provider_place_id: Optional[str] = Field(None, description="Verified provider place identifier")
+    google_maps_uri: Optional[str] = Field(None, description="Canonical Google Maps URI for this place")
+    place_id: Optional[str] = Field(None, description="Google place_id")
 
 
 # ------------------------------------------------------------------
