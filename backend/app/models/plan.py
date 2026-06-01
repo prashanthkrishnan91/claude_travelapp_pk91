@@ -47,6 +47,12 @@ class PlannedAttraction(BaseModel):
     # the honest fallback even when the source actually has coordinates.
     lat: Optional[float] = None
     lng: Optional[float] = None
+    # Plan My Day Place Resolution v1: carry canonical Google place identity so
+    # day-plan-accepted places match the Build/Concierge routeable metadata
+    # contract (place_id + google_maps_uri) and so missing coordinates can be
+    # resolved via the existing Google Places details path before persistence.
+    place_id: Optional[str] = None
+    google_maps_uri: Optional[str] = None
 
 
 class PlannedRestaurant(BaseModel):
@@ -65,6 +71,9 @@ class PlannedRestaurant(BaseModel):
     # See PlannedAttraction.lat/lng — same routeable-metadata-parity contract.
     lat: Optional[float] = None
     lng: Optional[float] = None
+    # Plan My Day Place Resolution v1 — see PlannedAttraction.place_id.
+    place_id: Optional[str] = None
+    google_maps_uri: Optional[str] = None
 
 
 class DayPlanResponse(BaseModel):

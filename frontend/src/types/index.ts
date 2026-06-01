@@ -235,6 +235,12 @@ export interface AttractionSearchResult {
   bookingOptions?: BookingOption[];
   lat?: number;
   lng?: number;
+  // Plan My Day Place Resolution v1: canonical Google place identity (parity
+  // with RestaurantSearchResult) so day-plan-accepted attractions persist the
+  // same routeable metadata as Build/Concierge items.
+  providerPlaceId?: string;
+  googleMapsUri?: string;
+  placeId?: string;
 }
 
 // ─── Proximity Cluster ────────────────────────────────────────────────────────

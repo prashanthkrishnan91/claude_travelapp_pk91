@@ -580,6 +580,10 @@ def _compute_restaurant_tags(
 # ---------------------------------------------------------------------------
 
 _GOOGLE_PLACES_SEARCH_ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
+# Place Details (GET) on the same Google Places provider — used by
+# resolve_place_details to recover a single place's location when the bulk
+# text search omitted it (Plan My Day Place Resolution v1).
+_GOOGLE_PLACES_DETAILS_ENDPOINT = "https://places.googleapis.com/v1/places/"
 
 # Field mask for restaurant search — includes price and type fields not in the
 # verification mask used by GooglePlacesService.
@@ -1178,9 +1182,59 @@ class SearchService:
                     tags=[t.replace("_", " ").title() for t in types[:3]],
                     lat=place.get("lat"),
                     lng=place.get("lng"),
+                    place_id=place_id,
+                    provider_place_id=place_id,
+                    google_maps_uri=place.get("google_maps_uri"),
                 )
             )
         return results
+
+    def resolve_place_details(self, place_id: str) -> Optional[Dict[str, Any]]:
+        """Resolve a single Google ``place_id`` to canonical location + maps URI.
+
+        Plan My Day Place Resolution v1: when a day-plan recommendation is
+        place-like but the bulk text-search response omitted ``location`` for
+        that row, this reuses the **existing** Google Places provider (the same
+        ``places.googleapis.com`` endpoint family and ``GOOGLE_PLACES_API_KEY``)
+        to fetch Place Details for that one place. No new provider architecture.
+
+        Returns ``{lat, lng, google_maps_uri, address}`` only when a real
+        location comes back; fails closed to ``None`` when the API key is
+        absent, httpx is unavailable, the place_id is empty, the request
+        errors, or the response carries no coordinates. Never fabricates
+        coordinates and never geocodes from an address string.
+        """
+        place_id = (place_id or "").strip()
+        if not place_id:
+            return None
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY", "")
+        if not api_key or httpx is None:
+            return None
+        headers = {
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": "id,location,googleMapsUri,formattedAddress",
+        }
+        url = f"{_GOOGLE_PLACES_DETAILS_ENDPOINT}{place_id}"
+        try:
+            with httpx.Client(timeout=6.0) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            logger.warning("[resolve_place_details] place_id=%s failed: %s", place_id, exc)
+            return None
+
+        location_data = data.get("location") or {}
+        lat = location_data.get("latitude") if isinstance(location_data, dict) else None
+        lng = location_data.get("longitude") if isinstance(location_data, dict) else None
+        if lat is None or lng is None:
+            return None
+        return {
+            "lat": lat,
+            "lng": lng,
+            "google_maps_uri": (data.get("googleMapsUri") or "").strip() or None,
+            "address": (data.get("formattedAddress") or "").strip() or None,
+        }
 
     def search_restaurants(self, req: RestaurantSearchRequest) -> List[RestaurantResult]:
         query = req.model_dump(mode="json")

@@ -104,6 +104,8 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
                     booking_url=a.booking_url or "",
                     lat=a.lat,
                     lng=a.lng,
+                    place_id=a.place_id,
+                    google_maps_uri=a.google_maps_uri,
                 )
                 for a in attractions_slice
             ]
@@ -111,7 +113,7 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
         logger.warning("[plan_day] Canonical attraction search failed; returning attractions=[]")
         planned_attractions = []
 
-    return DayPlanResponse(
+    response = DayPlanResponse(
         trip_id=payload.trip_id,
         day_number=payload.day_number,
         destination=destination,
@@ -131,6 +133,8 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
             booking_url=lunch.booking_url,
             lat=lunch.lat,
             lng=lunch.lng,
+            place_id=lunch.place_id,
+            google_maps_uri=lunch.google_maps_uri,
         ),
         dinner=PlannedRestaurant(
             id=dinner.id,
@@ -147,8 +151,58 @@ def plan_day(payload: DayPlanRequest, db: DB) -> DayPlanResponse:
             booking_url=dinner.booking_url,
             lat=dinner.lat,
             lng=dinner.lng,
+            place_id=dinner.place_id,
+            google_maps_uri=dinner.google_maps_uri,
         ),
     )
+    _resolve_day_plan_coords(response, search)
+    return response
+
+
+def _place_id_of(item) -> "str | None":
+    """Canonical Google place_id for a planned item.
+
+    Prefers the explicit ``place_id`` field; falls back to stripping the
+    ``gp-`` prefix the canonical search path stamps onto ``id``. Returns None
+    when no real Google place_id is available (e.g. cluster items seeded from
+    itinerary rows without provider identity).
+    """
+    pid = getattr(item, "place_id", None)
+    if pid:
+        return pid
+    raw = getattr(item, "id", "") or ""
+    if raw.startswith("gp-") and len(raw) > 3:
+        return raw[3:]
+    return None
+
+
+def _resolve_day_plan_coords(response: DayPlanResponse, search: SearchService) -> None:
+    """Plan My Day Place Resolution v1 — best-effort canonical place resolution.
+
+    For each planned item that is place-like (carries a Google place_id) but is
+    missing lat/lng, resolve coordinates via the existing Google Places details
+    path and fill lat/lng (and google_maps_uri when absent). Mutates the
+    response in place. Never fabricates: when resolution fails the item keeps
+    its honest coordinate-less fallback, preserving display address/category/
+    rating. Items that already have coordinates are left untouched (no extra
+    provider calls), so resolution only fires for the genuine gap.
+    """
+    planned_items = [*response.attractions, response.lunch, response.dinner]
+    for item in planned_items:
+        if item.lat is not None and item.lng is not None:
+            continue
+        place_id = _place_id_of(item)
+        if not place_id:
+            continue
+        resolved = search.resolve_place_details(place_id)
+        if not resolved:
+            continue
+        item.lat = resolved["lat"]
+        item.lng = resolved["lng"]
+        if not item.place_id:
+            item.place_id = place_id
+        if not item.google_maps_uri and resolved.get("google_maps_uri"):
+            item.google_maps_uri = resolved["google_maps_uri"]
 
 
 def _plan_from_cluster(
@@ -202,7 +256,7 @@ def _plan_from_cluster(
         else cluster_restaurants[0]
     )
 
-    return DayPlanResponse(
+    response = DayPlanResponse(
         trip_id=payload.trip_id,
         day_number=payload.day_number,
         destination=destination,
@@ -252,3 +306,5 @@ def _plan_from_cluster(
             lng=(dinner.lng if dinner.lng else None),
         ),
     )
+    _resolve_day_plan_coords(response, SearchService(db))
+    return response
