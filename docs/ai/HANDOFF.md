@@ -1,6 +1,10 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-05-29 (Trip Item Metadata Parity v1.3 — Plan My Day canonical write boundary)
+Last updated: 2026-06-01 (Trip Item Metadata Parity v1.4 — Plan My Day persisted-candidate source recovery)
+
+### Trip Item Metadata Parity v1.4 — Plan My Day persisted-candidate recovery (PR #499 follow-up)
+
+Direct production-DB query proved the failing case (Phillip & Patricia Frost Museum of Science added via Plan My Day on 2026-06-01) DOES have a persisted candidate row from `create-with-search` (2026-05-19) carrying real `details.lat`, `details.lng`, `details.place_id`, `details.source: google_places`. v1.3 wired Plan My Day through the canonical extractor on the lossy `AttractionSearchResult` shape, but the AttractionSearchResult.lat was undefined for Frost (likely because the backend `/plan/day` v1.2 lat/lng forwarding isn't active in the preview's Railway backend yet, or returned partial data for this specific place). Maurice A. Ferré Park worked because Maurice has a v1.1 Build/CandidatePanel persisted candidate; the v1.1 source-lookup recovered its coords. The asymmetry was the lookup KEY: `/search/attractions` returns `id="gp-{place_id}"` but v1.1 `candidateSourceItemsRef` was keyed only by raw `place_id` and `ItineraryItem.id` — so Plan My Day's `attraction.id = "gp-ChIJ..."` missed every candidate. v1.4 (frontend-only, no backend dependency): (1) `candidateSourceItemsRef` also keyed by `gp-{placeId}` and `title:{normalized}`. (2) `handlePlanAddAttraction`/`handlePlanAddRestaurant` do a three-step lookup (id → strip `gp-` prefix → normalized title fallback), extract canonical metadata from the recovered persisted source, and merge `{...fromShape, ...fromSource}` so persisted coords win over the lossy shape. (3) When no candidate exists AND the shape has no coords, `additionalDetails` is `{}` and the honest fallback shows — never fabricated. Works even if backend v1.2 is not yet deployed because recovery uses the local fetchTripItems cache. Tests grow 35 → 41 (all pass); 68/68 total.
 
 ### Trip Item Metadata Parity v1.3 — Plan My Day canonical write boundary (PR #499 follow-up)
 

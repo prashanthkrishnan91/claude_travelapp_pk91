@@ -407,11 +407,11 @@ test("extractRouteableTripItemMetadata only emits lat/lng when both are real num
 test("v1.3 — handlePlanAddAttraction passes canonical metadata into addAttractionToDay", () => {
   const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
   assert.ok(idx > -1, "handlePlanAddAttraction must exist");
-  const slice = tripBuilderSrc.slice(idx, idx + 1200);
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
   assert.match(
     slice,
-    /extractRouteableTripItemMetadata\(\s*attraction/,
-    "handlePlanAddAttraction must call the canonical extractor on the attraction",
+    /extractRouteableTripItemMetadata/,
+    "handlePlanAddAttraction must call the canonical extractor",
   );
   assert.match(
     slice,
@@ -423,11 +423,11 @@ test("v1.3 — handlePlanAddAttraction passes canonical metadata into addAttract
 test("v1.3 — handlePlanAddRestaurant passes canonical metadata into addRestaurantToDay", () => {
   const idx = tripBuilderSrc.indexOf("handlePlanAddRestaurant");
   assert.ok(idx > -1, "handlePlanAddRestaurant must exist");
-  const slice = tripBuilderSrc.slice(idx, idx + 1200);
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
   assert.match(
     slice,
-    /extractRouteableTripItemMetadata\(\s*restaurant/,
-    "handlePlanAddRestaurant must call the canonical extractor on the restaurant",
+    /extractRouteableTripItemMetadata/,
+    "handlePlanAddRestaurant must call the canonical extractor",
   );
   assert.match(
     slice,
@@ -445,7 +445,7 @@ test("v1.3 — Plan My Day write boundary is identical to Build/CandidatePanel",
   const planAttIdx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
   const buildAttIdx = tripBuilderSrc.indexOf("handleAddAttractionToItinerary");
   assert.ok(planAttIdx > -1 && buildAttIdx > -1);
-  const planSlice = tripBuilderSrc.slice(planAttIdx, planAttIdx + 1200);
+  const planSlice = tripBuilderSrc.slice(planAttIdx, planAttIdx + 2500);
   const buildSlice = tripBuilderSrc.slice(buildAttIdx, buildAttIdx + 2500);
   // Both call extractRouteableTripItemMetadata.
   assert.match(planSlice, /extractRouteableTripItemMetadata/);
@@ -469,4 +469,74 @@ test("v1.3 — extractor produces empty additionalDetails when source has no coo
     /value !== undefined && value !== null/,
     "extractor must skip nullish — proves no fake coords are injected",
   );
+});
+
+// ---------------------------------------------------------------------------
+// 16. v1.4 — Plan My Day recovers coords from persisted candidate row.
+// ---------------------------------------------------------------------------
+
+test("v1.4 — candidateSourceItemsRef keys include the gp-{placeId} form", () => {
+  assert.match(
+    tripBuilderSrc,
+    /sourceMap\.set\(`gp-\$\{placeId\}`,\s*it\)/,
+    "source map must be keyed by gp-{placeId} so /plan/day's id=gp-... lookups hit",
+  );
+});
+
+test("v1.4 — candidateSourceItemsRef keys include normalized title", () => {
+  assert.match(
+    tripBuilderSrc,
+    /sourceMap\.set\(`title:\$\{normTitle\(it\.title\)\}`,\s*it\)/,
+    "source map must be keyed by normalized title as a last-resort lookup",
+  );
+});
+
+test("v1.4 — handlePlanAddAttraction tries gp- prefix strip + title fallback", () => {
+  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
+  assert.ok(idx > -1);
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(slice, /sourceMap\.get\(attraction\.id\)/, "primary lookup by id");
+  assert.match(
+    slice,
+    /sourceMap\.get\(attraction\.id\?\.replace\(\/\^gp-\/,\s*""\)\)/,
+    "must strip gp- prefix before secondary lookup",
+  );
+  assert.match(slice, /sourceMap\.get\(titleKey\)/, "title fallback lookup");
+});
+
+test("v1.4 — handlePlanAddRestaurant uses the same recovery chain", () => {
+  const idx = tripBuilderSrc.indexOf("handlePlanAddRestaurant");
+  assert.ok(idx > -1);
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(slice, /sourceMap\.get\(restaurant\.id\)/);
+  assert.match(slice, /sourceMap\.get\(restaurant\.id\?\.replace\(\/\^gp-\/,\s*""\)\)/);
+  assert.match(slice, /sourceMap\.get\(titleKey\)/);
+});
+
+test("v1.4 — Plan My Day prefers persisted-source coords over lossy shape", () => {
+  // Routeable metadata recovered from the persisted candidate row must
+  // override the lossy AttractionSearchResult shape when both are present —
+  // because the persisted row carries placeId/googleMapsUri/canonical coords
+  // that the search-result shape cannot. Spread order: shape first, source last.
+  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(
+    slice,
+    /\{\s*\.\.\.fromShape,\s*\.\.\.fromSource\s*\}/,
+    "merge must spread fromSource LAST so persisted coords win over lossy-shape coords",
+  );
+});
+
+test("v1.4 — no fabrication: lookup returns no metadata when no candidate exists", () => {
+  // When sourceMap.get returns undefined and the shape has no coords, the
+  // resulting additionalDetails is empty — addAttractionToDay persists
+  // lat:null/lng:null and the honest fallback shows.
+  const idx = tripBuilderSrc.indexOf("handlePlanAddAttraction");
+  const slice = tripBuilderSrc.slice(idx, idx + 2500);
+  assert.match(
+    slice,
+    /sourceItem\s*\?\s*extractRouteableTripItemMetadata\(/,
+    "extractor only runs when sourceItem exists — otherwise fromSource is {}",
+  );
+  assert.match(slice, /:\s*\{\}/, "fromSource defaults to {} when no candidate found");
 });

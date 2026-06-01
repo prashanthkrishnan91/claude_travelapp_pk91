@@ -1463,6 +1463,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       // search-result shape cannot carry (placeId, googleMapsUri, formattedAddress,
       // and alternate-key coordinates persisted by older trips).
       const sourceMap = new Map<string, ItineraryItem>();
+      const normTitle = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
       for (const it of items) {
         if (it.itemType !== "activity" && it.itemType !== "meal") continue;
         const d = (it.details ?? {}) as Record<string, unknown>;
@@ -1472,8 +1473,22 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
           (typeof d.providerPlaceId === "string" && d.providerPlaceId) ||
           (typeof d.provider_place_id === "string" && (d.provider_place_id as string)) ||
           undefined;
-        if (placeId) sourceMap.set(placeId, it);
+        if (placeId) {
+          sourceMap.set(placeId, it);
+          // Trip Item Metadata Parity v1.4: search_attraction_results /
+          // search_restaurant_results use `id=gp-{place_id}` for their items.
+          // Plan My Day attraction.id therefore looks like "gp-ChIJ...". Key
+          // the persisted source map by both raw and gp-prefixed forms so the
+          // Plan My Day handler can recover canonical coords from the
+          // persisted candidate (e.g. the create-with-search row).
+          sourceMap.set(`gp-${placeId}`, it);
+        }
         sourceMap.set(it.id, it);
+        // Title fallback — last resort for cases where no placeId match
+        // exists on the persisted side (older rows or non-Google sources).
+        // Title alone is not unique across trips, but within a single trip's
+        // item list it is a good narrowing key.
+        if (it.title) sourceMap.set(`title:${normTitle(it.title)}`, it);
       }
       candidateSourceItemsRef.current = sourceMap;
     })();
@@ -1946,17 +1961,30 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    // Trip Item Metadata Parity v1.3: Plan My Day uses the same canonical
-    // write boundary as Build/CandidatePanel (v1.1). Any routeable metadata
-    // on the AttractionSearchResult (lat/lng under canonical or alternate
-    // keys; placeId/googleMapsUri if backend supplies them later) flows
-    // through unchanged. Never fabricates: when the upstream `/plan/day`
-    // response carries no coordinates, `additionalDetails` simply omits them
-    // and the placed item correctly shows the honest "Add location details"
-    // fallback.
-    const additionalDetails = extractRouteableTripItemMetadata(
+    // Trip Item Metadata Parity v1.4: Plan My Day now does the same persisted-
+    // candidate lookup that v1.1 Build/CandidatePanel does. Plan My Day
+    // attraction.id arrives as "gp-{place_id}"; candidateSourceItemsRef is
+    // keyed by raw place_id, gp-prefixed place_id, ItineraryItem.id, and
+    // normalized title. When a persisted candidate row exists for the same
+    // place (e.g. a `create-with-search` row carrying real lat/lng/place_id),
+    // its canonical metadata is merged into the placed item — even if the
+    // `/plan/day` backend response itself is missing coordinates for that
+    // specific place. Never fabricates: when neither the AttractionSearchResult
+    // nor any persisted candidate carries coords, the honest fallback shows.
+    const sourceMap = candidateSourceItemsRef.current;
+    const titleKey = `title:${(attraction.name || "").trim().toLowerCase().replace(/\s+/g, " ")}`;
+    const sourceItem =
+      sourceMap.get(attraction.id) ||
+      sourceMap.get(attraction.id?.replace(/^gp-/, "")) ||
+      sourceMap.get(titleKey);
+    const fromSource = sourceItem
+      ? extractRouteableTripItemMetadata((sourceItem.details ?? {}) as Record<string, unknown>)
+      : {};
+    const fromShape = extractRouteableTripItemMetadata(
       attraction as unknown as Record<string, unknown>,
     );
+    // Prefer persisted-source metadata; fill from the lossy shape.
+    const additionalDetails: Record<string, unknown> = { ...fromShape, ...fromSource };
     const newItem = await addAttractionToDay(tripId, dayPlanTargetDayId, attraction, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
@@ -1965,10 +1993,20 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
 
   const handlePlanAddRestaurant = useCallback(async (restaurant: RestaurantSearchResult) => {
     if (!dayPlanTargetDayId) return;
-    // See handlePlanAddAttraction — same canonical write-boundary contract.
-    const additionalDetails = extractRouteableTripItemMetadata(
+    // See handlePlanAddAttraction — same persisted-candidate-lookup contract.
+    const sourceMap = candidateSourceItemsRef.current;
+    const titleKey = `title:${(restaurant.name || "").trim().toLowerCase().replace(/\s+/g, " ")}`;
+    const sourceItem =
+      sourceMap.get(restaurant.id) ||
+      sourceMap.get(restaurant.id?.replace(/^gp-/, "")) ||
+      sourceMap.get(titleKey);
+    const fromSource = sourceItem
+      ? extractRouteableTripItemMetadata((sourceItem.details ?? {}) as Record<string, unknown>)
+      : {};
+    const fromShape = extractRouteableTripItemMetadata(
       restaurant as unknown as Record<string, unknown>,
     );
+    const additionalDetails: Record<string, unknown> = { ...fromShape, ...fromSource };
     const newItem = await addRestaurantToDay(tripId, dayPlanTargetDayId, restaurant, additionalDetails);
     setDays((prev) =>
       prev.map((d) => d.id === dayPlanTargetDayId ? { ...d, items: [...d.items, newItem] } : d)
