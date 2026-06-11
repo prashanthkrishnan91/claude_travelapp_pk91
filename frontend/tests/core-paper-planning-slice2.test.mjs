@@ -408,47 +408,6 @@ describe("ItineraryDayColumn — paper day page surfaces", () => {
   });
 });
 
-// ── 6. TripReadinessCockpit — paper planning panel ────────────────────────────
-
-describe("TripReadinessCockpit — paper overview panel", () => {
-  const cockpit = readSrc("components/trips/TripReadinessCockpit.tsx");
-
-  it("uses folio-paper-panel (not bg-ds-onyx)", () => {
-    assert.ok(cockpit.includes("folio-paper-panel"), "TripReadinessCockpit must use folio-paper-panel");
-    assert.ok(!cockpit.includes("bg-ds-onyx"), "TripReadinessCockpit must not use bg-ds-onyx");
-  });
-
-  it("header uses folio-paper-header (not bg-ds-carbon)", () => {
-    assert.ok(cockpit.includes("folio-paper-header"), "Cockpit header must use folio-paper-header");
-    assert.ok(!cockpit.includes("concierge-desk-header"), "Cockpit must not use dark concierge-desk-header");
-  });
-
-  it("PRIMARY_BTN uses marine-ink fill (not bg-ds-accent)", () => {
-    const idx = cockpit.indexOf("PRIMARY_BTN");
-    const block = cockpit.slice(idx, idx + 200);
-    assert.ok(block.includes("marine-ink"), "PRIMARY_BTN must use marine-ink fill");
-    assert.ok(!block.includes("bg-ds-accent"), "PRIMARY_BTN must not use bg-ds-accent");
-  });
-
-  it("GHOST_BTN uses hairline border (not pen-stroke)", () => {
-    const idx = cockpit.indexOf("GHOST_BTN");
-    const block = cockpit.slice(idx, idx + 200);
-    assert.ok(block.includes("hairline"), "GHOST_BTN must use hairline border");
-  });
-
-  it("footer section uses linen (not bg-ds-carbon)", () => {
-    assert.ok(!cockpit.includes("bg-ds-carbon"), "Cockpit footer must not use bg-ds-carbon");
-    assert.ok(cockpit.includes("folio-paper-section") || cockpit.includes("linen"), "Cockpit footer must use paper section bg");
-  });
-
-  it("day coverage active pills use marine-ink (not bg-ds-accent)", () => {
-    const idx = cockpit.indexOf("day-coverage-strip");
-    const block = cockpit.slice(idx - 100, idx + 1500);
-    assert.ok(block.includes("marine-ink"), "active day pills must use marine-ink");
-    assert.ok(!block.includes("bg-ds-accent text-ds-text-inverse"), "active day pills must not use old accent style");
-  });
-});
-
 // ── 7. PR #431 protected paths — untouched ────────────────────────────────────
 
 describe("PR #431 protected logic paths — untouched", () => {
@@ -486,7 +445,6 @@ describe("Existing testids preserved in converted files", () => {
   const tripsPage = readSrc("app/trips/page.tsx");
   const tripDetail = readSrc("app/trips/[id]/page.tsx");
   const col = readSrc("components/trips/ItineraryDayColumn.tsx");
-  const cockpit = readSrc("components/trips/TripReadinessCockpit.tsx");
 
   it("journey-card testid preserved", () => {
     assert.ok(tripsPage.includes('data-testid="journey-card"'), "journey-card testid must be preserved");
@@ -568,28 +526,12 @@ describe("Existing testids preserved in converted files", () => {
     assert.ok(col.includes('data-testid="day-part-section"'), "day-part-section testid must be preserved");
   });
 
-  it("trip-readiness-cockpit testid preserved", () => {
-    assert.ok(cockpit.includes('data-testid="trip-readiness-cockpit"'), "trip-readiness-cockpit testid must be preserved");
-  });
-
-  it("day-coverage-strip testid preserved", () => {
-    assert.ok(cockpit.includes('data-testid="day-coverage-strip"'), "day-coverage-strip testid must be preserved");
-  });
-
-  it("readiness-signals testid preserved", () => {
-    assert.ok(cockpit.includes('data-testid="readiness-signals"'), "readiness-signals testid must be preserved");
-  });
-
-  it("next-action-area testid preserved", () => {
-    assert.ok(cockpit.includes('data-testid="next-action-area"'), "next-action-area testid must be preserved");
-  });
 });
 
 // ── 9. No dark-world regressions in converted areas ──────────────────────────
 
 describe("No dark-world token regressions in converted areas", () => {
   const col = readSrc("components/trips/ItineraryDayColumn.tsx");
-  const cockpit = readSrc("components/trips/TripReadinessCockpit.tsx");
   const tripsPage = readSrc("app/trips/page.tsx");
 
   it("ItineraryDayColumn does not use ds-midnight-ink anywhere", () => {
@@ -600,10 +542,6 @@ describe("No dark-world token regressions in converted areas", () => {
     assert.ok(!col.includes("bg-ds-onyx"), "ItineraryDayColumn must not use bg-ds-onyx");
   });
 
-  it("TripReadinessCockpit does not use bg-ds-carbon (dark recessed section)", () => {
-    assert.ok(!cockpit.includes("bg-ds-carbon"), "TripReadinessCockpit must not use bg-ds-carbon");
-  });
-
   it("trips/page.tsx JourneyCard does not use bg-ds-onyx", () => {
     assert.ok(!tripsPage.includes("boutique-folio"), "trips page must not use old boutique-folio class");
   });
@@ -612,10 +550,6 @@ describe("No dark-world token regressions in converted areas", () => {
   // The @theme exposes warm paper as --color-ds-paper, so the correct utility is text-ds-paper.
   it("ItineraryDayColumn does not use invalid text-ds-warm-paper utility", () => {
     assert.ok(!col.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
-  });
-
-  it("TripReadinessCockpit does not use invalid text-ds-warm-paper utility", () => {
-    assert.ok(!cockpit.includes("text-ds-warm-paper"), "use text-ds-paper not text-ds-warm-paper (invalid Tailwind utility)");
   });
 
   it("trips/[id]/page.tsx does not use invalid text-ds-warm-paper utility", () => {

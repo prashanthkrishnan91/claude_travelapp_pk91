@@ -12,11 +12,6 @@ const tripDetailPage = readFileSync(
   "utf8",
 );
 
-const cockpit = readFileSync(
-  new URL("../src/components/trips/TripReadinessCockpit.tsx", import.meta.url),
-  "utf8",
-);
-
 // ── Chapter cover structure ───────────────────────────────────────────────────
 
 test("trip detail page has a chapter cover section with data-testid", () => {
@@ -256,8 +251,8 @@ test("page does not import from provider or backend paths", () => {
 
 // ── Preserved behaviors ───────────────────────────────────────────────────────
 
-// Journey Desk PR 1 removed the readiness cockpit from the page (the component
-// file remains in the repo, unused). See blueprint §4.
+// Journey Desk PR 1 removed the readiness cockpit from the page; the component
+// file has since been deleted (dead code cleanup). See blueprint §4.
 test("page no longer imports or renders TripReadinessCockpit", () => {
   assert.doesNotMatch(tripDetailPage, /from "@\/components\/trips\/TripReadinessCockpit"/);
   assert.doesNotMatch(tripDetailPage, /TripReadinessCockpit/);
@@ -337,55 +332,3 @@ test("page does not import or reference Duffel or Ignav providers", () => {
   assert.doesNotMatch(tripDetailPage, /ignav/i);
 });
 
-// ── Advisor briefing structure (TripReadinessCockpit) ────────────────────────
-
-test("advisor briefing uses 'Concierge Notes' overline (not 'Trip Briefing')", () => {
-  assert.match(cockpit, /Concierge Notes/);
-  assert.doesNotMatch(cockpit, /Trip Briefing/);
-});
-
-test("advisor briefing has no score indicator (no X/4 coveredCount display)", () => {
-  // The score display was: <span>{coveredCount}</span><span>/{signals.length}</span>
-  // This pattern means we should NOT have the score fraction in a visual span
-  assert.doesNotMatch(cockpit, /\{coveredCount\}.*\{signals\.length\}/s);
-});
-
-test("advisor briefing day coverage has no 'DAY COVERAGE' overline label", () => {
-  assert.doesNotMatch(cockpit, /Day Coverage/);
-  assert.doesNotMatch(cockpit, /DAY COVERAGE/);
-});
-
-test("advisor briefing next-step section has no 'NEXT STEP' overline label", () => {
-  assert.doesNotMatch(cockpit, /Next Step/);
-  assert.doesNotMatch(cockpit, /NEXT STEP/);
-});
-
-test("advisor briefing planning tools section has no 'ALSO TRY' label", () => {
-  assert.doesNotMatch(cockpit, /Also try/);
-  assert.doesNotMatch(cockpit, /ALSO TRY/);
-});
-
-test("advisor briefing next step description uses italic for advisor tone", () => {
-  const nextActionBlock = cockpit.slice(
-    cockpit.indexOf('data-testid="next-action-area"'),
-    cockpit.indexOf('data-testid="planning-tools-strip"'),
-  );
-  assert.match(nextActionBlock, /italic/);
-});
-
-test("advisor briefing still derives signals from itemType (no fake data)", () => {
-  assert.match(cockpit, /i\.itemType === "flight"/);
-  assert.match(cockpit, /i\.itemType === "hotel"/);
-  assert.match(cockpit, /i\.itemType === "meal"/);
-  assert.match(cockpit, /i\.itemType === "activity"/);
-});
-
-test("advisor briefing preserves honest signal copy ('Looks like', 'Still needs')", () => {
-  assert.match(cockpit, /Looks like/);
-  assert.match(cockpit, /Still needs/);
-});
-
-test("advisor briefing day coverage uses 'days planned' phrase (not 'have plans')", () => {
-  // New phrasing in the summary text
-  assert.match(cockpit, /days planned/);
-});
