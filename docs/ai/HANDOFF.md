@@ -1,8 +1,14 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-01 (Plan My Day Place Resolution v1 — resolve place-like day-plan recommendations into canonical routeable metadata via the existing Google Places details path)
+Last updated: 2026-06-11 (PR #502 — ItineraryItemCard meal/restaurant map-link parity)
 
-### Plan My Day Place Resolution v1 (this branch — PR #499 follow-up)
+### Meal/restaurant map-link parity (PR #502)
+
+**Gap:** `ItineraryItemCard` activity cards rendered an `ExternalLink "Map"` anchor from `details.googleMapsUri` / `details.google_maps_uri` / `details.placeId`. The meal/restaurant IIFE block had the same fields stored by `addRestaurantToDay` but rendered no map link.
+
+**Fix (frontend-only):** Added `mealMapsUri`/`mealPlaceId`/`maps_link`/`source_url` extraction to the meal block; renders `ExternalLink "Map"` anchor with identical styling to the activity block. Early-exit guard includes `!mealMapsLink`. No geocoding, no fabricated URLs, no provider calls. 8 new source-scan tests, 57/57 pass.
+
+### Plan My Day Place Resolution v1 (PR #500 — merged)
 
 **Problem:** Plan My Day could write itinerary items with display address/rating/category but no lat/lng or canonical place identity, so route hints fell back to "Add location details to improve travel hints." PR #499 fixed Build/Add-to-Day + Concierge; Plan My Day stayed address-only when the bulk `/plan/day` provider response omitted coordinates for a specific place (the documented Frost Museum case).
 
