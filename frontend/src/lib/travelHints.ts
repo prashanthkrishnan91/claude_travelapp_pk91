@@ -1,6 +1,7 @@
 /** Client-side travel time hints for adjacent itinerary stops. */
 
 import { estimateTravel, TravelEstimate } from "./travelTime";
+import { readCanonicalLat, readCanonicalLng } from "./tripItemMetadata";
 
 export type PairHintKind = "travel_ok" | "far_apart" | "missing_location";
 
@@ -34,12 +35,10 @@ export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
   for (let i = 0; i < items.length - 1; i++) {
     const a = items[i];
     const b = items[i + 1];
-    const da = (a.details ?? {}) as Record<string, unknown>;
-    const db = (b.details ?? {}) as Record<string, unknown>;
-    const lat1 = da.lat as number | null | undefined;
-    const lng1 = da.lng as number | null | undefined;
-    const lat2 = db.lat as number | null | undefined;
-    const lng2 = db.lng as number | null | undefined;
+    const lat1 = readCanonicalLat(a.details as Record<string, unknown> | null | undefined);
+    const lng1 = readCanonicalLng(a.details as Record<string, unknown> | null | undefined);
+    const lat2 = readCanonicalLat(b.details as Record<string, unknown> | null | undefined);
+    const lng2 = readCanonicalLng(b.details as Record<string, unknown> | null | undefined);
 
     if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) {
       hints.push({
