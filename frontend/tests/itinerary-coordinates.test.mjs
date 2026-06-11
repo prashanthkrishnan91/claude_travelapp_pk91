@@ -137,15 +137,18 @@ test("buildSavePayload writes lat/lng from ctx.location into displaySnapshot", (
   );
 });
 
-test("buildSavePayload guards lat/lng — only written when real numbers present", () => {
+test("buildSavePayload guards lat/lng with Number.isFinite — rejects NaN, Infinity, and non-numbers", () => {
   const snapshotStart = actionSheet.indexOf("const displaySnapshot");
   const snapshotEnd = actionSheet.indexOf("let searchContext", snapshotStart);
   const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
-  // Must be a conditional, not unconditional spread
+  // Number.isFinite is the strictest guard: rejects NaN, Infinity, -Infinity, undefined
   assert.ok(
-    snapshotBlock.includes("typeof ctx.location") || snapshotBlock.includes("ctx.location?.lat"),
-    "lat/lng missing write guard — could spread undefined"
+    snapshotBlock.includes("Number.isFinite"),
+    "lat/lng guard must use Number.isFinite (typeof guard is not sufficient — it passes NaN and Infinity)"
   );
+  // Must gate both lat and lng
+  const isFiniteCount = (snapshotBlock.match(/Number\.isFinite/g) || []).length;
+  assert.ok(isFiniteCount >= 2, `Number.isFinite must guard both lat and lng — found ${isFiniteCount} call(s)`);
 });
 
 test("buildSavePayload writes providerPlaceId into displaySnapshot for place identity persistence", () => {
@@ -166,6 +169,21 @@ test("addSavedItemToTrip forwards item.providerPlaceId as fallback when snapshot
   assert.match(block, /details\.providerPlaceId/);
   // Must prefer snapshot value over top-level field
   assert.match(block, /snap\["providerPlaceId"\]/);
+});
+
+test("addSavedItemToTrip writes both providerPlaceId (camelCase) and provider_place_id (snake_case) for canonical metadata", () => {
+  const start = api.indexOf("export async function addSavedItemToTrip");
+  const end = api.indexOf("async function seedSavedFlightAsItineraryItem");
+  const block = api.slice(start, end);
+  assert.match(block, /details\.providerPlaceId = resolvedProviderPlaceId/);
+  assert.match(block, /details\.provider_place_id = resolvedProviderPlaceId/);
+  // Both must be written in the same guarded block
+  const guardIdx = block.indexOf("if (resolvedProviderPlaceId)");
+  const guardBlock = block.slice(guardIdx, guardIdx + 200);
+  assert.ok(
+    guardBlock.includes("providerPlaceId") && guardBlock.includes("provider_place_id"),
+    "both camelCase and snake_case providerPlaceId must be written in the same guard block"
+  );
 });
 
 test("addSavedItemToTrip without lat/lng in snapshot does not fabricate coordinates", () => {

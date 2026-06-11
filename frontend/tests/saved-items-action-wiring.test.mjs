@@ -329,8 +329,20 @@ test('buildSavePayload writes providerPlaceId (from ctx.providerIdentity) into d
   const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
   const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
   assert.ok(
-    snapshotBlock.includes('providerPlaceId') || snapshotBlock.includes('providerIdentity'),
-    'providerPlaceId/providerIdentity not written into displaySnapshot'
+    snapshotBlock.includes('providerPlaceId'),
+    'providerPlaceId not written into displaySnapshot'
+  );
+});
+
+test('buildSavePayload providerPlaceId is gated on non-empty string — empty/undefined providerIdentity not written', () => {
+  const snapshotStart = actionSheet.indexOf('const displaySnapshot');
+  const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  // Guard must check both type and truthiness (non-empty string)
+  assert.ok(
+    snapshotBlock.includes('typeof ctx.providerIdentity === "string"') &&
+    snapshotBlock.includes('ctx.providerIdentity'),
+    'providerPlaceId must be gated on typeof string && truthy (non-empty)'
   );
 });
 

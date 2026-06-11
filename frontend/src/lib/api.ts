@@ -2739,7 +2739,10 @@ export async function addSavedItemToTrip(
       : typeof item.providerPlaceId === "string" && item.providerPlaceId
       ? item.providerPlaceId
       : undefined);
-  if (resolvedProviderPlaceId) details.providerPlaceId = resolvedProviderPlaceId;
+  if (resolvedProviderPlaceId) {
+    details.providerPlaceId = resolvedProviderPlaceId;
+    details.provider_place_id = resolvedProviderPlaceId;
+  }
 
   if (item.vertical === "restaurant") {
     if (typeof snap["cuisine"] === "string" && snap["cuisine"]) details.cuisine = snap["cuisine"];
