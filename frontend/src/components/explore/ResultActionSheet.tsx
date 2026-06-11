@@ -54,6 +54,15 @@ function buildSavePayload(ctx: ExploreResultContext): SavedItemCreate {
     ...( payload["address"] !== undefined && { address: payload["address"] }),
     ...( payload["tags"] !== undefined && { tags: payload["tags"] }),
     ...( payload["googleMapsUri"] !== undefined && { googleMapsUri: payload["googleMapsUri"] }),
+    // Real routeable metadata from the provider — never geocoded or fabricated.
+    // ctx.location carries lat/lng set by the Explore adapter; only written when
+    // both are finite numbers so extractItineraryCoordinates can recover them on
+    // the Saved → Trip path.
+    ...(typeof ctx.location?.lat === "number" && typeof ctx.location?.lng === "number" && {
+      lat: ctx.location.lat,
+      lng: ctx.location.lng,
+    }),
+    ...(ctx.providerIdentity !== undefined && { providerPlaceId: ctx.providerIdentity }),
   };
 
   let searchContext: Record<string, unknown> = { destination: ctx.destination };

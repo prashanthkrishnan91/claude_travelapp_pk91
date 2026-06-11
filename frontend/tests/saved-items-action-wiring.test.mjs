@@ -302,6 +302,49 @@ test('Pydantic model uses Field(default_factory=dict) not mutable defaults', () 
   );
 });
 
+// ── 14. Explore → Saved routeable metadata gap (upstream-to-trip handoff audit) ─
+
+test('buildSavePayload writes lat from ctx.location into displaySnapshot', () => {
+  const snapshotStart = actionSheet.indexOf('const displaySnapshot');
+  const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes('ctx.location?.lat') || snapshotBlock.includes('ctx.location.lat'),
+    'lat from ctx.location not written into displaySnapshot'
+  );
+});
+
+test('buildSavePayload writes lng from ctx.location into displaySnapshot', () => {
+  const snapshotStart = actionSheet.indexOf('const displaySnapshot');
+  const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes('ctx.location?.lng') || snapshotBlock.includes('ctx.location.lng'),
+    'lng from ctx.location not written into displaySnapshot'
+  );
+});
+
+test('buildSavePayload writes providerPlaceId (from ctx.providerIdentity) into displaySnapshot', () => {
+  const snapshotStart = actionSheet.indexOf('const displaySnapshot');
+  const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes('providerPlaceId') || snapshotBlock.includes('providerIdentity'),
+    'providerPlaceId/providerIdentity not written into displaySnapshot'
+  );
+});
+
+test('buildSavePayload lat/lng are gated — not written when ctx.location is absent', () => {
+  // Guard must be a type check, not an unconditional spread
+  const snapshotStart = actionSheet.indexOf('const displaySnapshot');
+  const snapshotEnd = actionSheet.indexOf('let searchContext', snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes('typeof ctx.location') || snapshotBlock.includes('ctx.location?.lat'),
+    'lat/lng must be conditionally written — guard missing'
+  );
+});
+
 // ── 13. Forbidden scope ───────────────────────────────────────────────────────
 
 test('tripCandidates.ts has no saved_items reference', () => {
