@@ -22,6 +22,10 @@ const api = readFileSync(
   new URL("../src/lib/api.ts", import.meta.url),
   "utf8",
 );
+const actionSheet = readFileSync(
+  new URL("../src/components/explore/ResultActionSheet.tsx", import.meta.url),
+  "utf8",
+);
 const map = readFileSync(
   new URL("../src/components/trips/MapFoldOut.tsx", import.meta.url),
   "utf8",
@@ -112,4 +116,95 @@ test("MapFoldOut validates persisted coordinates through the normalizer", () => 
 
 test("v2B introduces no plotted pin map and no fabricated positions", () => {
   assert.doesNotMatch(map, /leaflet|Leaflet|goldenSpread|heatLayer|drawMarker|L\.marker/);
+});
+
+// ── Explore → Saved routeable metadata gap closure (upstream handoff audit) ───
+
+test("buildSavePayload writes lat/lng from ctx.location into displaySnapshot", () => {
+  // After the gap fix, ctx.location?.lat and ctx.location?.lng must appear in the
+  // displaySnapshot block so extractItineraryCoordinates can recover them on the
+  // Saved → Trip path. This closes the honest missing_location fallback.
+  const snapshotStart = actionSheet.indexOf("const displaySnapshot");
+  const snapshotEnd = actionSheet.indexOf("let searchContext", snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes("ctx.location?.lat") || snapshotBlock.includes("ctx.location.lat"),
+    "lat not written from ctx.location into displaySnapshot"
+  );
+  assert.ok(
+    snapshotBlock.includes("ctx.location?.lng") || snapshotBlock.includes("ctx.location.lng"),
+    "lng not written from ctx.location into displaySnapshot"
+  );
+});
+
+test("buildSavePayload guards lat/lng with Number.isFinite — rejects NaN, Infinity, and non-numbers", () => {
+  const snapshotStart = actionSheet.indexOf("const displaySnapshot");
+  const snapshotEnd = actionSheet.indexOf("let searchContext", snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  // Number.isFinite is the strictest guard: rejects NaN, Infinity, -Infinity, undefined
+  assert.ok(
+    snapshotBlock.includes("Number.isFinite"),
+    "lat/lng guard must use Number.isFinite (typeof guard is not sufficient — it passes NaN and Infinity)"
+  );
+  // Must gate both lat and lng
+  const isFiniteCount = (snapshotBlock.match(/Number\.isFinite/g) || []).length;
+  assert.ok(isFiniteCount >= 2, `Number.isFinite must guard both lat and lng — found ${isFiniteCount} call(s)`);
+});
+
+test("buildSavePayload writes providerPlaceId into displaySnapshot for place identity persistence", () => {
+  const snapshotStart = actionSheet.indexOf("const displaySnapshot");
+  const snapshotEnd = actionSheet.indexOf("let searchContext", snapshotStart);
+  const snapshotBlock = actionSheet.slice(snapshotStart, snapshotEnd);
+  assert.ok(
+    snapshotBlock.includes("providerPlaceId"),
+    "providerPlaceId not written into displaySnapshot"
+  );
+});
+
+test("addSavedItemToTrip forwards item.providerPlaceId as fallback when snapshot lacks it", () => {
+  const start = api.indexOf("export async function addSavedItemToTrip");
+  const end = api.indexOf("async function seedSavedFlightAsItineraryItem");
+  const block = api.slice(start, end);
+  assert.match(block, /item\.providerPlaceId/);
+  assert.match(block, /details\.providerPlaceId/);
+  // Must prefer snapshot value over top-level field
+  assert.match(block, /snap\["providerPlaceId"\]/);
+});
+
+test("addSavedItemToTrip writes both providerPlaceId (camelCase) and provider_place_id (snake_case) for canonical metadata", () => {
+  const start = api.indexOf("export async function addSavedItemToTrip");
+  const end = api.indexOf("async function seedSavedFlightAsItineraryItem");
+  const block = api.slice(start, end);
+  assert.match(block, /details\.providerPlaceId = resolvedProviderPlaceId/);
+  assert.match(block, /details\.provider_place_id = resolvedProviderPlaceId/);
+  // Both must be written in the same guarded block
+  const guardIdx = block.indexOf("if (resolvedProviderPlaceId)");
+  const guardBlock = block.slice(guardIdx, guardIdx + 200);
+  assert.ok(
+    guardBlock.includes("providerPlaceId") && guardBlock.includes("provider_place_id"),
+    "both camelCase and snake_case providerPlaceId must be written in the same guard block"
+  );
+});
+
+test("addSavedItemToTrip without lat/lng in snapshot does not fabricate coordinates", () => {
+  const start = api.indexOf("export async function addSavedItemToTrip");
+  const end = api.indexOf("async function seedSavedFlightAsItineraryItem");
+  const block = api.slice(start, end);
+  // coordinates are only set inside the savedCoords guard
+  assert.match(block, /if \(savedCoords\) \{/);
+  // no unconditional lat/lng assignment outside the guard
+  const guardedBlock = block.replace(/if \(savedCoords\) \{[\s\S]*?\}/m, "");
+  assert.doesNotMatch(guardedBlock, /details\.lat = /);
+  assert.doesNotMatch(guardedBlock, /details\.lng = /);
+});
+
+test("no fake coordinates, place IDs, or travel times introduced in either file", () => {
+  const actionSheetCode = actionSheet.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(actionSheetCode, /geocode|Nominatim|fabricat|goldenSpread|Math\.random/i);
+  const addBlock = (() => {
+    const start = api.indexOf("export async function addSavedItemToTrip");
+    const end = api.indexOf("async function seedSavedFlightAsItineraryItem");
+    return api.slice(start, end).replace(/\/\/.*$/gm, "");
+  })();
+  assert.doesNotMatch(addBlock, /geocode|Nominatim|fabricat|goldenSpread|Math\.random/i);
 });

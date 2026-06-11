@@ -2731,6 +2731,19 @@ export async function addSavedItemToTrip(
     details.coordinateSource = "saved_item";
   }
 
+  // Forward provider identity from snapshot first; fall back to top-level
+  // item.providerPlaceId for items saved before the snapshot fix.
+  const resolvedProviderPlaceId =
+    (typeof snap["providerPlaceId"] === "string" && snap["providerPlaceId"]
+      ? snap["providerPlaceId"]
+      : typeof item.providerPlaceId === "string" && item.providerPlaceId
+      ? item.providerPlaceId
+      : undefined);
+  if (resolvedProviderPlaceId) {
+    details.providerPlaceId = resolvedProviderPlaceId;
+    details.provider_place_id = resolvedProviderPlaceId;
+  }
+
   if (item.vertical === "restaurant") {
     if (typeof snap["cuisine"] === "string" && snap["cuisine"]) details.cuisine = snap["cuisine"];
     if (typeof snap["priceLevel"] === "number") details.priceLevel = snap["priceLevel"];
