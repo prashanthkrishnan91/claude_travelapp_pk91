@@ -729,7 +729,7 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           );
         })()}
 
-        {/* Restaurant (meal) vertical details: cuisine, rating, price level, tags, reservation time */}
+        {/* Restaurant (meal) vertical details: cuisine, rating, price level, tags, map link, reservation time */}
         {item.itemType === "meal" && (() => {
           const d = (item.details ?? {}) as Record<string, unknown>;
           const rating = typeof d.rating === "number" ? (d.rating as number) : undefined;
@@ -740,7 +740,14 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
           const priceLevelStr = priceLevel != null ? "$".repeat(Math.min(4, Math.max(1, Math.round(priceLevel)))) : null;
           const reservationTime = typeof d.reservationTime === "string" ? d.reservationTime : undefined;
           const formattedReservation = reservationTime ? formatClock(reservationTime) : null;
-          if (!rating && !cuisine && !priceLevelStr && tags.length === 0 && !formattedReservation) return null;
+          const mealMapsUri = (d.googleMapsUri as string | undefined) ?? (d.google_maps_uri as string | undefined);
+          const mealPlaceId = (d.placeId as string | undefined) ?? (d.place_id as string | undefined);
+          const mealMapsLink = mealMapsUri
+            ?? (mealPlaceId ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(mealPlaceId)}` : null)
+            ?? (d.maps_link as string | undefined)
+            ?? (d.source_url as string | undefined)
+            ?? null;
+          if (!rating && !cuisine && !priceLevelStr && tags.length === 0 && !formattedReservation && !mealMapsLink) return null;
           return (
             <div className="mt-1 space-y-0.5 pt-1 border-t border-ds-hairline">
               <div className="flex items-center gap-2 flex-wrap">
@@ -757,6 +764,19 @@ export function ItineraryItemCard({ item, onRemove, onUnplace, onToggleCompare, 
                   </span>
                 )}
                 {priceLevelStr && <span className="text-[11px] text-ds-folio-ink-mist font-medium">{priceLevelStr}</span>}
+                {mealMapsLink && (
+                  <a
+                    href={mealMapsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-0.5 text-[11px] text-ds-folio-ink-mist hover:text-ds-marine-ink transition-colors -my-3.5 py-3.5"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Open in Google Maps"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                    Map
+                  </a>
+                )}
               </div>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">

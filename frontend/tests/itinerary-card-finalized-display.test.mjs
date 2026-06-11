@@ -217,6 +217,52 @@ test('ItineraryItemCard: meal block reads d.tags for pill display', () => {
   assert.match(mealBlock, /d\.tags/, 'Meal block must read d.tags for tag pills');
 });
 
+test('ItineraryItemCard: meal block reads googleMapsUri/google_maps_uri for map link', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
+  assert.match(mealBlock, /google_maps_uri|googleMapsUri/, 'Meal block must read google_maps_uri / googleMapsUri to build map link');
+});
+
+test('ItineraryItemCard: meal block reads place_id/placeId as fallback for map link', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
+  assert.match(mealBlock, /place_id|placeId/, 'Meal block must read place_id / placeId as map URL fallback');
+});
+
+test('ItineraryItemCard: meal block reads maps_link as fallback for map link', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
+  assert.match(mealBlock, /maps_link/, 'Meal block must read maps_link as map URL fallback');
+});
+
+test('ItineraryItemCard: meal block reads source_url as fallback for map link', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
+  assert.match(mealBlock, /source_url/, 'Meal block must read source_url as map URL fallback');
+});
+
+test('ItineraryItemCard: meal block uses ExternalLink icon for map link (parity with activity)', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 3500);
+  assert.match(mealBlock, /ExternalLink/, 'Meal block must use ExternalLink icon — parity with activity block');
+});
+
+test('ItineraryItemCard: meal block does not render map link when no URL fields are present (early-exit guard includes mealMapsLink)', () => {
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const mealBlock = itemCard.slice(mealIdx, mealIdx + 2000);
+  // The early-exit condition must include the meal map link variable so the section
+  // does not render at all when only a map link would have kept it alive.
+  assert.match(mealBlock, /!mealMapsLink/, 'Early-exit condition must guard on !mealMapsLink');
+});
+
+test('ItineraryItemCard: activity block map link behavior unchanged — still reads googleMapsUri/placeId', () => {
+  const activityIdx = itemCard.indexOf('item.itemType === "activity" && (() => {');
+  const mealIdx = itemCard.indexOf('item.itemType === "meal" && (() => {');
+  const activityBlock = itemCard.slice(activityIdx, mealIdx > activityIdx ? mealIdx : undefined);
+  assert.match(activityBlock, /google_maps_uri|googleMapsUri/, 'Activity block must still read google_maps_uri / googleMapsUri');
+  assert.match(activityBlock, /ExternalLink/, 'Activity block must still render ExternalLink map icon');
+});
+
 // ── 5. Flight schedule display intact ────────────────────────────────────────
 
 test('ItineraryItemCard: flight block still reads origin and destination', () => {
