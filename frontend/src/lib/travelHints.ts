@@ -1,8 +1,9 @@
 /** Client-side travel time hints for adjacent itinerary stops. */
 
+import { readCanonicalLat, readCanonicalLng } from "./tripItemMetadata";
 import { estimateTravel, TravelEstimate } from "./travelTime";
 
-export type PairHintKind = "travel_ok" | "far_apart" | "missing_location";
+export type PairHintKind = "travel_ok" | "far_apart" | "missing_location" | "skip";
 
 export interface PairHint {
   itemAId: string;
@@ -20,13 +21,25 @@ export const CONSERVATIVE_WALK_FACTOR = 1.35;
 /** Prefer walk hints only when the conservative estimate remains reasonably short. */
 export const MAX_WALK_HINT_MIN = 35;
 
+/**
+ * Item types excluded from travel hint computation.
+ * Flights have no geographic waypoint (IATA codes only).
+ * Hotels are check-in anchors, not routable stops.
+ * Notes and transit items carry no coordinate semantics.
+ */
+const NON_ROUTABLE_TYPES = new Set(["flight", "hotel", "note", "transit"]);
+
 interface HintableItem {
   id: string;
+  itemType?: string;
   details?: Record<string, unknown> | null;
 }
 
 /**
  * Returns one PairHint per adjacent pair in the given ordered list.
+ * Pairs where either item is a flight, hotel, note, or transit are skipped
+ * (kind: "skip") — those item types are anchor/transit semantics, not
+ * routable waypoints.
  * Returns [] when items has fewer than two entries.
  */
 export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
@@ -34,12 +47,18 @@ export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
   for (let i = 0; i < items.length - 1; i++) {
     const a = items[i];
     const b = items[i + 1];
+
+    if (NON_ROUTABLE_TYPES.has(a.itemType ?? "") || NON_ROUTABLE_TYPES.has(b.itemType ?? "")) {
+      hints.push({ itemAId: a.id, itemBId: b.id, kind: "skip", label: "" });
+      continue;
+    }
+
     const da = (a.details ?? {}) as Record<string, unknown>;
     const db = (b.details ?? {}) as Record<string, unknown>;
-    const lat1 = da.lat as number | null | undefined;
-    const lng1 = da.lng as number | null | undefined;
-    const lat2 = db.lat as number | null | undefined;
-    const lng2 = db.lng as number | null | undefined;
+    const lat1 = readCanonicalLat(da);
+    const lng1 = readCanonicalLng(da);
+    const lat2 = readCanonicalLat(db);
+    const lng2 = readCanonicalLng(db);
 
     if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) {
       hints.push({
@@ -81,7 +100,7 @@ export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
   return hints;
 }
 
-/** Aggregates hints to identify day-level issues. */
+/** Aggregates hints to identify day-level issues. Skip hints are not counted. */
 export function summarizeHints(hints: PairHint[]): {
   farApartCount: number;
   missingLocationCount: number;

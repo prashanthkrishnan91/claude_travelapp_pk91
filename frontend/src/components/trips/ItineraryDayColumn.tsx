@@ -12,6 +12,7 @@ import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
+import { hasRouteableCoordinates } from "@/lib/tripItemMetadata";
 import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
@@ -138,7 +139,13 @@ function renderItemsWithConnectors(
     if (idx >= items.length - 1) return [card];
     const hint = hints[idx];
     let connector: React.ReactNode;
-    if (hint.kind === "missing_location") {
+    if (hint.kind === "skip") {
+      connector = (
+        <div key={`skip-${item.id}`} className="flex items-center px-3 py-0.5">
+          <div className="w-px h-3 bg-ds-hairline ml-[17px] flex-shrink-0" />
+        </div>
+      );
+    } else if (hint.kind === "missing_location") {
       connector = (
         <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
           <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
@@ -354,6 +361,39 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
     <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1.5">
       <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" />
       <span className="text-[10px] text-ds-folio-ink-mist leading-tight">{message} Rough hints only.</span>
+    </div>
+  );
+}
+
+// ─── RouteReadinessStatus ────────────────────────────────────────────────────
+
+/**
+ * Passive display badge showing how many routable stops on this day have
+ * coordinates. Shown only when some stops are missing location data.
+ * Activity and meal items are counted; flights, hotels, notes, and transit
+ * are excluded (they are not routable waypoints).
+ */
+function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
+  const routableItems = items.filter(
+    (item) => item.itemType === "activity" || item.itemType === "meal",
+  );
+  if (routableItems.length === 0) return null;
+
+  const withCoords = routableItems.filter((item) =>
+    hasRouteableCoordinates((item.details ?? {}) as Record<string, unknown>),
+  ).length;
+
+  if (withCoords >= routableItems.length) return null;
+
+  return (
+    <div
+      data-testid="route-readiness-status"
+      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+    >
+      <MapPin className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+      <span className="text-[10px] text-ds-folio-ink-mist leading-tight">
+        {withCoords} of {routableItems.length} stops have location data. Add more to enable route hints.
+      </span>
     </div>
   );
 }
@@ -790,6 +830,7 @@ export function ItineraryDayColumn({
           </SortableContext>
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
+          <RouteReadinessStatus items={visibleItems} />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (
