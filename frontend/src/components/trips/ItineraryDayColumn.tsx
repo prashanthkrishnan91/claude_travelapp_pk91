@@ -138,7 +138,13 @@ function renderItemsWithConnectors(
     if (idx >= items.length - 1) return [card];
     const hint = hints[idx];
     let connector: React.ReactNode;
-    if (hint.kind === "missing_location") {
+    if (hint.kind === "skip") {
+      connector = (
+        <div key={`connector-${item.id}`} className="flex items-center px-3 py-1">
+          <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
+        </div>
+      );
+    } else if (hint.kind === "missing_location") {
       connector = (
         <div key={`hint-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
           <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />

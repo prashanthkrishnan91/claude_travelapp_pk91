@@ -3,7 +3,7 @@
 import { estimateTravel, TravelEstimate } from "./travelTime";
 import { readCanonicalLat, readCanonicalLng } from "./tripItemMetadata";
 
-export type PairHintKind = "travel_ok" | "far_apart" | "missing_location";
+export type PairHintKind = "travel_ok" | "far_apart" | "missing_location" | "skip";
 
 export interface PairHint {
   itemAId: string;
@@ -23,6 +23,7 @@ export const MAX_WALK_HINT_MIN = 35;
 
 interface HintableItem {
   id: string;
+  itemType?: string;
   details?: Record<string, unknown> | null;
 }
 
@@ -35,6 +36,12 @@ export function computeAdjacentHints(items: HintableItem[]): PairHint[] {
   for (let i = 0; i < items.length - 1; i++) {
     const a = items[i];
     const b = items[i + 1];
+
+    if (a.itemType === "flight" || a.itemType === "hotel" || b.itemType === "flight" || b.itemType === "hotel") {
+      hints.push({ itemAId: a.id, itemBId: b.id, kind: "skip", label: "" });
+      continue;
+    }
+
     const lat1 = readCanonicalLat(a.details as Record<string, unknown> | null | undefined);
     const lng1 = readCanonicalLng(a.details as Record<string, unknown> | null | undefined);
     const lat2 = readCanonicalLat(b.details as Record<string, unknown> | null | undefined);
