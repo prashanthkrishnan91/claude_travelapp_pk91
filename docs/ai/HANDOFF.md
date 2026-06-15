@@ -1,6 +1,24 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-15 (Concierge fast-path coordinate preservation — PR #508)
+Last updated: 2026-06-15 (Route Planning v1 Contract ADR — docs-only)
+
+### Route Planning v1 Contract ADR (docs-only — open)
+
+Decision-only design note: `docs/ai/ROUTE_PLANNING_V1_CONTRACT.md`. Gates the
+route-planning capability **before** any implementation, following the
+route-readiness chain (#504 canonical coord readers, #506 flight/hotel skip,
+#507 passive `RouteReadinessStatus`, #508 fast-path coord preservation).
+**Recommendation: PROCEED narrowly — v1 = manual "Check route" travel-time
+preview for the current manual order only; no auto-reorder / Optimize Day /
+multi-day / route map / hidden calls / fake times.** Eligible items = activity/
+meal with canonical coordinates only (never geocode, never fabricate). Provider
+sequence: **"no provider yet" → Google Routes API** (rejects Mapbox/OSRM for v1;
+`provider_registry.py` has no routing role today, MapTiler is `MAP_TILE` only).
+Includes hard cost guardrails, proposed backend/UI contracts (no DB schema), a
+next-3-PR release sequence (registry skeleton → flag-gated endpoint → flag-gated
+UI), and a merge gate for any future live provider. **No production code,
+package, env, SQL, or UI changes.** Optimize Day stays disabled until the merge
+gate is satisfied.
 
 ### Concierge fast-path coordinate preservation (PR #508 — open)
 
