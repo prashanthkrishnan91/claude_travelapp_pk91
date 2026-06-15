@@ -1,7 +1,7 @@
 /** Client-side travel time hints for adjacent itinerary stops. */
 
 import { estimateTravel, TravelEstimate } from "./travelTime";
-import { readCanonicalLat, readCanonicalLng } from "./tripItemMetadata";
+import { readCanonicalLat, readCanonicalLng, hasRouteableCoordinates } from "./tripItemMetadata";
 
 export type PairHintKind = "travel_ok" | "far_apart" | "missing_location" | "skip";
 
@@ -100,4 +100,34 @@ export function summarizeHints(hints: PairHint[]): {
     missingLocationCount,
     hasIssues: farApartCount + missingLocationCount > 0,
   };
+}
+
+export interface RouteReadinessResult {
+  /** Total eligible stops counted (activity/meal only). */
+  total: number;
+  /** Eligible stops that have canonical coordinates. */
+  withCoords: number;
+}
+
+/**
+ * Returns a readiness summary showing how many activity/meal stops have
+ * canonical coordinates, or null when no status should be shown:
+ * - null if fewer than 2 eligible stops.
+ * - null if all eligible stops already have canonical coordinates.
+ * - { total, withCoords } when at least one eligible stop is missing coordinates.
+ * Flight/hotel are excluded; they are not navigation-eligible waypoints.
+ * Pure local computation; no provider calls, no external reads.
+ */
+export function computeRouteReadiness(
+  items: HintableItem[],
+): RouteReadinessResult | null {
+  const eligible = items.filter(
+    (item) => item.itemType === "activity" || item.itemType === "meal",
+  );
+  if (eligible.length < 2) return null;
+  const withCoords = eligible.filter((item) =>
+    hasRouteableCoordinates(item.details as Record<string, unknown> | null | undefined),
+  ).length;
+  if (withCoords === eligible.length) return null;
+  return { total: eligible.length, withCoords };
 }

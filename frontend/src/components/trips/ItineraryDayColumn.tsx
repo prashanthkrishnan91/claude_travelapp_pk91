@@ -11,7 +11,7 @@ import { ItineraryDay, ItineraryItem } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
-import { computeAdjacentHints, summarizeHints } from "@/lib/travelHints";
+import { computeAdjacentHints, computeRouteReadiness, summarizeHints } from "@/lib/travelHints";
 import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
@@ -360,6 +360,25 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
     <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1.5">
       <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" />
       <span className="text-[10px] text-ds-folio-ink-mist leading-tight">{message} Rough hints only.</span>
+    </div>
+  );
+}
+
+// ─── RouteReadinessStatus ─────────────────────────────────────────────────────
+
+function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
+  const status = computeRouteReadiness(items);
+  if (!status) return null;
+  return (
+    <div
+      data-testid="route-readiness-status"
+      className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+    >
+      <MapPin className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
+      <span className="text-[10px] text-ds-folio-ink-mist leading-tight">
+        {status.withCoords} of {status.total} stops have location data.{" "}
+        <span className="opacity-70">Add locations before route planning.</span>
+      </span>
     </div>
   );
 }
@@ -796,6 +815,7 @@ export function ItineraryDayColumn({
           </SortableContext>
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
+          <RouteReadinessStatus items={visibleItems} />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (

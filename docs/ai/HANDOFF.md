@@ -1,6 +1,10 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-11 (dead-code cleanup — TripReadinessCockpit deleted)
+Last updated: 2026-06-13 (Route Readiness Status — PR #507)
+
+### Route Readiness Status — passive day-level coordinate coverage indicator (PR #507)
+
+Display-only. Added `computeRouteReadiness` to `travelHints.ts` (filters activity/meal, uses `hasRouteableCoordinates`, returns null when <2 eligible stops or all have coords). Added `RouteReadinessStatus` inline component to `ItineraryDayColumn.tsx` near `DayTravelHintBar` — shows "X of Y stops have location data. Add locations before route planning." only when applicable. 27 new tests (`route-readiness-status.test.mjs`). PR #504 canonical coord access intact; PR #506 skip behavior intact. Frontend-only; no SQL, backend, provider calls, or geocoding. 3868/3881 pass (13 pre-existing failures, unchanged).
 
 ### Dead-code cleanup — TripReadinessCockpit deleted
 
