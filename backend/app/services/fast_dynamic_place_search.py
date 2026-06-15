@@ -883,6 +883,9 @@ class FastDynamicPlaceSearch:
         address = (place.get("formattedAddress") or "").strip() or None
         maps_uri = place.get("googleMapsUri")
         website = place.get("websiteUri")
+        _loc = place.get("location")
+        lat: Optional[float] = _loc.get("latitude") if isinstance(_loc, dict) else None
+        lng: Optional[float] = _loc.get("longitude") if isinstance(_loc, dict) else None
 
         cuisine_label = _derive_cuisine_label(types, parsed.cuisine)
 
@@ -909,6 +912,8 @@ class FastDynamicPlaceSearch:
             provider_place_id=place_id,
             name=name,
             formatted_address=address,
+            lat=lat,
+            lng=lng,
             business_status=_OPERATIONAL,
             google_maps_uri=maps_uri,
             website_uri=website,

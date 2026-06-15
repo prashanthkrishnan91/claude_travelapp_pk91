@@ -1,6 +1,18 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-13 (Route Readiness Status — PR #507)
+Last updated: 2026-06-15 (Concierge fast-path coordinate preservation — PR #508)
+
+### Concierge fast-path coordinate preservation (PR #508 — open)
+
+**Root cause:** `fast_dynamic_place_search._to_card()` requested `places.location` in the Google Places API field mask but never parsed `latitude`/`longitude` from it when constructing `GoogleVerification`. As a result, Concierge-added activity/meal items via the fast path lacked `lat`/`lng` in their stored details, so `RouteReadinessStatus` counted them as missing-location stops.
+
+**All frontend active write paths were already correct:** `addStructuredConciergeItemToTrip` and `saveToTripIdeas` both spread `normalizeGoogleVerificationDetails(item)` into the details payload, which correctly extracts `lat`/`lng` from `gv.lat`/`gv.lng`. The gap was that `gv.lat`/`gv.lng` were always `None` because the backend fast path never populated them.
+
+**Fix (backend, 5 lines):** In `_to_card`, extract `_loc = place.get("location")`, then `lat = _loc.get("latitude") if isinstance(_loc, dict) else None`, `lng = _loc.get("longitude") if isinstance(_loc, dict) else None`. Pass `lat=lat, lng=lng` to `GoogleVerification(...)`. Mirrors the slow-path pattern in `google_places.py:560-561`.
+
+**Verification notes:** Slow path (`google_places.py` → `live_research._to_pydantic_google_verification`) and `semantic_retrieval.py` both already carried `lat`/`lng`. No frontend changes needed. No SQL, no provider expansion, no geocoding, no route optimization, no reorder, no Journey Desk layout changes. Legacy `addConciergeItemToTrip` (reason-only) is a dead export and remains safe.
+
+**Tests:** 19 backend tests (`test_concierge_fast_path_coordinate_preservation.py`) + 30 frontend tests (`concierge-add-path-metadata.test.mjs`). All pass. PR #504 canonical coord access intact; PR #506 flight/hotel skip intact; `route-readiness-status.test.mjs` 26/26 intact; `travel-time-hints.test.mjs` 27/27 intact; `itinerary-coordinates.test.mjs` 19/19 intact.
 
 ### Route Readiness Status — passive day-level coordinate coverage indicator (PR #507)
 
