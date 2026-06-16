@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     # research_source only.
     google_places_api_key: str = ""
 
+    # Route Planning v1 — flag-gated route-estimate endpoint (PR 2 of ADR sequence).
+    # Default False. When True, endpoint still returns not_configured (no adapter yet).
+    # Missing env var does not break startup (pydantic default=False handles it).
+    # Rollback: set ROUTE_ESTIMATE_V1_ENABLED=false or omit the var entirely.
+    route_estimate_v1_enabled: bool = False
+
     # Cost-control guardrails for expensive AI/search routes
     guardrail_ai_concierge_requests: int = 6
     guardrail_ai_concierge_window_seconds: int = 60
