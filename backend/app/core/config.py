@@ -61,11 +61,15 @@ class Settings(BaseSettings):
     # research_source only.
     google_places_api_key: str = ""
 
-    # Route Planning v1 — flag-gated route-estimate endpoint (PR 2 of ADR sequence).
-    # Default False. When True, endpoint still returns not_configured (no adapter yet).
+    # Route Planning v1 — flag-gated route-estimate endpoint.
+    # Default False. Rollback: set ROUTE_ESTIMATE_V1_ENABLED=false or omit the var.
     # Missing env var does not break startup (pydantic default=False handles it).
-    # Rollback: set ROUTE_ESTIMATE_V1_ENABLED=false or omit the var entirely.
     route_estimate_v1_enabled: bool = False
+
+    # Route Planning v1 — Google Routes adapter API key.
+    # Optional; missing → fail-closed (not_configured). Does not break startup.
+    # Server-side only; never exposed to the frontend. Used by google_routes_adapter.
+    google_routes_api_key: str = ""
 
     # Cost-control guardrails for expensive AI/search routes
     guardrail_ai_concierge_requests: int = 6

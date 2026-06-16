@@ -1,4 +1,4 @@
-"""FastAPI TestClient endpoint tests for route-estimate — Route Planning v1 PR 2.
+"""FastAPI TestClient endpoint tests for route-estimate — Route Planning v1 PR 3 (live adapter).
 
 The parent conftest.py stubs fastapi as MagicMock to speed up service-level tests.
 These endpoint tests need the real FastAPI router, TestClient, and dependency overrides,
@@ -11,7 +11,10 @@ Proves:
 - POST /itinerary/{trip_id}/days/{day_id}/route-estimate is registered.
 - Unauthenticated request is rejected (401).
 - Authenticated + ROUTE_ESTIMATE_V1_ENABLED=false → status=disabled, fail-closed.
-- Authenticated + ROUTE_ESTIMATE_V1_ENABLED=true + valid stops → status=not_configured.
+- Authenticated + ROUTE_ESTIMATE_V1_ENABLED=true + key missing → status=not_configured.
+- flag=true + key present + owned trip/day + adapter success → status=success, estimates non-empty.
+- flag=true + key present + owned trip/day + adapter error → status=provider_error, estimates=[].
+- No provider call before day ownership is verified (day not found → 404, no adapter call).
 - Invalid lat/lng receives 422 at the API boundary (FastAPI/Pydantic).
 - Unsupported item types (flight, hotel, note) produce no estimates.
 """
@@ -22,7 +25,7 @@ import pathlib
 import sys
 import types
 from typing import Annotated
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 # ── Remove parent conftest's fastapi MagicMock stub ──────────────────────────
@@ -68,7 +71,18 @@ if _deps_stub is None:
 
 _deps_stub.get_current_user_id = _stub_get_current_user_id
 _deps_stub.CurrentUserID = Annotated[UUID, Depends(_stub_get_current_user_id)]
-_deps_stub.DB = MagicMock()
+
+# DB stub: real Annotated type so FastAPI can resolve the dependency.
+# Tests with key="" return before calling the db, so the mock db is never queried
+# in the existing flag-disabled/key-missing test paths.
+_mock_db = MagicMock()
+
+
+def _stub_get_db() -> MagicMock:
+    return _mock_db
+
+
+_deps_stub.DB = Annotated[MagicMock, Depends(_stub_get_db)]
 
 # ── Load app.routes.route_estimate directly (bypass __init__.py) ─────────────
 _re_path = pathlib.Path(__file__).parent.parent / "app" / "routes" / "route_estimate.py"
@@ -104,9 +118,10 @@ _STOP_B = {"item_id": "b", "title": "Stop B", "item_type": "meal",     "lat": 25
 _VALID_BODY = {"stops": [_STOP_A, _STOP_B]}
 
 
-def _settings(enabled: bool) -> MagicMock:
+def _settings(enabled: bool, key: str = "") -> MagicMock:
     s = MagicMock()
     s.route_estimate_v1_enabled = enabled
+    s.google_routes_api_key = key
     return s
 
 
@@ -166,28 +181,28 @@ class TestAuthenticatedFlagDisabled:
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["estimates"] == []
 
 
-# ── Tests: authenticated, flag=true, valid stops ─────────────────────────────
+# ── Tests: authenticated, flag=true, key missing ─────────────────────────────
 
 
-class TestAuthenticatedFlagEnabled:
+class TestAuthenticatedFlagEnabledKeyMissing:
     def test_returns_200(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).status_code == 200
 
     def test_status_is_not_configured(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["status"] == "not_configured"
 
-    def test_reason_is_provider_not_implemented(self, monkeypatch):
+    def test_reason_is_provider_key_missing(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
-        assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["reason"] == "provider_not_implemented"
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
+        assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["reason"] == "provider_key_missing"
 
     def test_estimates_empty(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["estimates"] == []
 
 
@@ -256,3 +271,111 @@ class TestUnsupportedItemTypesProduceNoEstimates:
         resp = _auth_client.post(_ROUTE_URL, json=body)
         assert resp.status_code == 200
         assert resp.json()["estimates"] == []
+
+
+# ── Helpers for live-path tests ───────────────────────────────────────────────
+
+def _db_both_owned():
+    """DB mock where trip and day ownership both pass."""
+    m = MagicMock()
+    m.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "x"}]
+    return m
+
+
+# ── Tests: live adapter path — success ────────────────────────────────────────
+
+
+class TestLivePathSuccess:
+    """flag=True + key present + owned trip+day + mocked adapter → success."""
+
+    def _run(self, monkeypatch, db_override=None):
+        import app.services.route_estimate as svc
+        from app.services.google_routes_adapter import AdapterResult, LegEstimate
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        db = db_override or _db_both_owned()
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        with patch("app.services.route_estimate.call_compute_routes") as mock_call:
+            mock_call.return_value = AdapterResult(
+                estimates=[LegEstimate("a", "b", 2000, 300, 0)],
+                provider_call_count=1,
+            )
+            return _auth_client.post(_ROUTE_URL, json=_VALID_BODY), mock_call
+
+    def test_returns_200(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert resp.status_code == 200
+
+    def test_status_is_success(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert resp.json()["status"] == "success"
+
+    def test_estimates_non_empty(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert len(resp.json()["estimates"]) == 1
+
+    def test_adapter_called_exactly_once(self, monkeypatch):
+        _, mock_call = self._run(monkeypatch)
+        assert mock_call.call_count == 1
+
+
+# ── Tests: live adapter path — provider error ─────────────────────────────────
+
+
+class TestLivePathProviderError:
+    """flag=True + key present + owned trip+day + adapter error → provider_error."""
+
+    def _run(self, monkeypatch):
+        import app.services.route_estimate as svc
+        from app.services.google_routes_adapter import AdapterResult
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        db = _db_both_owned()
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        with patch("app.services.route_estimate.call_compute_routes") as mock_call:
+            mock_call.return_value = AdapterResult(
+                estimates=[],
+                provider_call_count=1,
+                error_reason="http_error_500",
+            )
+            return _auth_client.post(_ROUTE_URL, json=_VALID_BODY), mock_call
+
+    def test_returns_200(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert resp.status_code == 200
+
+    def test_status_is_provider_error(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert resp.json()["status"] == "provider_error"
+
+    def test_estimates_empty(self, monkeypatch):
+        resp, _ = self._run(monkeypatch)
+        assert resp.json()["estimates"] == []
+
+
+# ── Tests: no provider call before day ownership verified ─────────────────────
+
+
+class TestNoProviderCallBeforeDayOwnership:
+    def test_day_not_found_returns_404_and_no_adapter_call(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        # Trip passes, day check raises 404
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "x"}]
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        with patch.object(svc, "_verify_day_ownership", side_effect=HTTPException(status_code=404, detail="Day not found")), \
+             patch.object(svc, "call_compute_routes") as mock_call:
+            resp = _auth_client.post(_ROUTE_URL, json=_VALID_BODY)
+        assert resp.status_code == 404
+        assert mock_call.call_count == 0
+
+    def test_day_wrong_trip_returns_404_and_no_adapter_call(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "x"}]
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        with patch.object(svc, "_verify_day_ownership", side_effect=HTTPException(status_code=404, detail="Day not found")), \
+             patch.object(svc, "call_compute_routes") as mock_call:
+            resp = _auth_client.post(_ROUTE_URL, json=_VALID_BODY)
+        assert resp.status_code == 404
+        assert mock_call.call_count == 0

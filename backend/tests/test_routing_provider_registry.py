@@ -1,13 +1,14 @@
-"""Routing provider registry tests — Route Planning v1 skeleton.
+"""Routing provider registry tests — Route Planning v1.
 
 Governed by Route Planning v1 Contract ADR (PR #509).
 
 Proves:
 - ROUTE_MATRIX role exists in ProviderRole.
 - google_routes is registered under ROUTE_MATRIX.
-- google_routes is disabled (production_allowed=False, is_provider_active=False).
+- google_routes registry entry remains production_allowed=False (adapter readiness
+  is gated separately via feature flag + GOOGLE_ROUTES_API_KEY, not this flag).
 - Missing routing env/key does not break app startup or registry imports.
-- No adapter / live-call module for routing exists.
+- google_routes_adapter module exists (PR 3) but unauthorized modules do not.
 - No Optimize Day / route optimization / reorder symbols introduced.
 - Existing Google Places (CANONICAL) and MapTiler (MAP_TILE) roles are unchanged.
 """
@@ -61,8 +62,11 @@ class TestGoogleRoutesDisabledByDefault:
         )
 
     def test_provider_not_active(self):
+        # production_allowed=False is intentional; adapter readiness uses feature flag
+        # + GOOGLE_ROUTES_API_KEY, not this registry flag.
         assert not is_provider_active("google_routes"), (
-            "google_routes must not be active (no adapter, no live calls)"
+            "google_routes registry must remain production_allowed=False; "
+            "adapter readiness is gated via feature flag + key separately"
         )
 
     def test_cannot_create_addable_cards(self):
@@ -78,21 +82,24 @@ class TestGoogleRoutesDisabledByDefault:
 
 
 class TestNoLiveRoutingCallsOrAdapter:
-    def test_no_routing_adapter_module(self):
-        """No routing adapter module should exist yet."""
-        routing_adapter_names = [
+    def test_google_routes_adapter_module_exists(self):
+        """google_routes_adapter exists (PR 3 live adapter)."""
+        spec = importlib.util.find_spec("app.services.google_routes_adapter")
+        assert spec is not None, (
+            "app.services.google_routes_adapter must exist (PR 3 live adapter)"
+        )
+
+    def test_unauthorized_routing_adapter_modules_absent(self):
+        """Modules outside the approved adapter must not exist."""
+        forbidden_names = [
             "app.services.routing_provider",
             "app.services.routing_provider_google",
-            "app.services.google_routes_adapter",
             "app.services.route_estimate_provider",
         ]
-        for mod_name in routing_adapter_names:
-            assert mod_name not in sys.modules, (
-                f"Module {mod_name!r} must not be imported (no adapter in skeleton PR)"
-            )
+        for mod_name in forbidden_names:
             spec = importlib.util.find_spec(mod_name)
             assert spec is None, (
-                f"Module {mod_name!r} must not exist (no adapter in skeleton PR)"
+                f"Module {mod_name!r} must not exist (unauthorized adapter)"
             )
 
     def test_no_optimize_day_symbol_in_registry(self):
