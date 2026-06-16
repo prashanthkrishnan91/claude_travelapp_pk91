@@ -8,6 +8,7 @@ Calls the computeRoutes endpoint ONLY (v2 REST API). Hard safety constraints:
 - Tight field mask: per-leg duration and distance only.
 - Single HTTP call per invocation; no retry loops.
 - MAX_ROUTABLE_STOPS enforced at adapter boundary.
+- Fail-closed: any missing or invalid leg field returns error, never silently uses 0.
 
 Governed by Route Planning v1 Contract ADR (PR #509).
 """
@@ -62,15 +63,15 @@ def _build_waypoint(stop: RouteableStop) -> dict:
     }
 
 
-def _parse_duration_seconds(duration_str: str) -> int:
-    """Parse Google Duration string '300s' → 300. Returns 0 on any parse failure."""
+def _parse_duration_seconds(duration_str: str) -> Optional[int]:
+    """Parse Google Duration string '300s' → 300. Returns None on any parse failure."""
     try:
         s = duration_str.strip()
         if s.endswith("s"):
             return int(s[:-1])
         return int(s)
     except (ValueError, AttributeError):
-        return 0
+        return None
 
 
 def call_compute_routes(
@@ -87,9 +88,14 @@ def call_compute_routes(
     - Stops are in caller-supplied order; never reordered here.
 
     Returns AdapterResult with provider_call_count=1 on any HTTP attempt
-    (success or error), 0 only if we somehow skip the call (shouldn't happen
-    given caller contract, but defensive).
+    (success or error), 0 if the call is skipped due to invalid input.
+    Fail-closed: any missing or invalid leg field returns an error result,
+    never silently substituting 0 for missing provider data.
     """
+    # Defensive boundary: service layer must enforce these, but reject here too.
+    if len(valid_stops) < 2 or len(valid_stops) > MAX_ROUTABLE_STOPS:
+        return AdapterResult(provider_call_count=0, error_reason="invalid_stop_count")
+
     origin = valid_stops[0]
     destination = valid_stops[-1]
     intermediates = valid_stops[1:-1]
@@ -138,12 +144,27 @@ def call_compute_routes(
     if not legs:
         return AdapterResult(provider_call_count=1, error_reason="no_legs_returned")
 
+    expected_leg_count = len(valid_stops) - 1
+    if len(legs) != expected_leg_count:
+        return AdapterResult(provider_call_count=1, error_reason="leg_count_mismatch")
+
     estimates: List[LegEstimate] = []
     for i, leg in enumerate(legs):
-        if i >= len(valid_stops) - 1:
-            break
-        duration_seconds = _parse_duration_seconds(leg.get("duration", "0s"))
-        distance_meters = int(leg.get("distanceMeters", 0))
+        raw_duration = leg.get("duration")
+        if raw_duration is None:
+            return AdapterResult(provider_call_count=1, error_reason="missing_leg_duration")
+        duration_seconds = _parse_duration_seconds(raw_duration)
+        if duration_seconds is None:
+            return AdapterResult(provider_call_count=1, error_reason="invalid_leg_duration")
+
+        raw_distance = leg.get("distanceMeters")
+        if raw_distance is None:
+            return AdapterResult(provider_call_count=1, error_reason="missing_leg_distance")
+        try:
+            distance_meters = int(raw_distance)
+        except (ValueError, TypeError):
+            return AdapterResult(provider_call_count=1, error_reason="invalid_leg_distance")
+
         estimates.append(
             LegEstimate(
                 from_item_id=valid_stops[i].item_id,

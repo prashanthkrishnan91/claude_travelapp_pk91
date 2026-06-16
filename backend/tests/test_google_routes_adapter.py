@@ -107,11 +107,11 @@ class TestDurationParsing:
     def test_parses_with_whitespace(self):
         assert _parse_duration_seconds(" 45s ") == 45
 
-    def test_returns_zero_on_invalid(self):
-        assert _parse_duration_seconds("bad") == 0
+    def test_returns_none_on_invalid(self):
+        assert _parse_duration_seconds("bad") is None
 
-    def test_returns_zero_on_empty(self):
-        assert _parse_duration_seconds("") == 0
+    def test_returns_none_on_empty(self):
+        assert _parse_duration_seconds("") is None
 
 
 class TestAdapterMaxStopsCap:
@@ -129,6 +129,37 @@ class TestAdapterMaxStopsCap:
         client = _mock_client(200, _success_body(*[("600s", 5000)] * 9))
         call_compute_routes(stops, "fake-key", http_client=client)
         assert client.post.call_count == 1
+
+
+class TestAdapterBoundaryDefensive:
+    """Adapter rejects invalid stop counts without making an HTTP call."""
+
+    def test_adapter_rejects_fewer_than_2_stops_no_http_call(self):
+        stops = _stops("a")
+        mock_client = MagicMock(spec=httpx.Client)
+        result = call_compute_routes(stops, "fake-key", http_client=mock_client)
+        assert mock_client.post.call_count == 0
+        assert result.provider_call_count == 0
+        assert result.error_reason == "invalid_stop_count"
+
+    def test_adapter_rejects_more_than_max_stops_no_http_call(self):
+        stops = _stops(*[str(i) for i in range(MAX_ROUTABLE_STOPS + 1)])
+        mock_client = MagicMock(spec=httpx.Client)
+        result = call_compute_routes(stops, "fake-key", http_client=mock_client)
+        assert mock_client.post.call_count == 0
+        assert result.provider_call_count == 0
+        assert result.error_reason == "invalid_stop_count"
+
+
+def _db_trip_ok_day_fails():
+    """DB mock where trip ownership passes but day check returns no rows."""
+    trips_mock = MagicMock()
+    trips_mock.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "x"}]
+    days_mock = MagicMock()
+    days_mock.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+    db = MagicMock()
+    db.table.side_effect = lambda name: trips_mock if name == "trips" else days_mock
+    return db
 
 
 class TestAdapterNoCallWhenServiceGateFails:
@@ -198,8 +229,37 @@ class TestAdapterNoCallWhenServiceGateFails:
         svc = _svc()
         monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="somekey"))
         db_mock = MagicMock()
-        # Ownership check returns no rows → 404
+        # Trip ownership check returns no rows → 404
         db_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+        with patch.object(svc, "call_compute_routes") as mock_call:
+            with pytest.raises(Exception):
+                svc.compute_route_estimate(
+                    RouteEstimateRequest(stops=_stops("a", "b")),
+                    uuid4(), uuid4(),
+                    user_id=uuid4(),
+                    db=db_mock,
+                )
+            assert mock_call.call_count == 0
+
+    def test_no_call_when_day_does_not_exist(self, monkeypatch):
+        svc = _svc()
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="somekey"))
+        db_mock = _db_trip_ok_day_fails()
+        with patch.object(svc, "call_compute_routes") as mock_call:
+            with pytest.raises(Exception):
+                svc.compute_route_estimate(
+                    RouteEstimateRequest(stops=_stops("a", "b")),
+                    uuid4(), uuid4(),
+                    user_id=uuid4(),
+                    db=db_mock,
+                )
+            assert mock_call.call_count == 0
+
+    def test_no_call_when_day_belongs_to_different_trip(self, monkeypatch):
+        """Day query uses trip_id constraint; wrong trip → no rows → 404, no provider call."""
+        svc = _svc()
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="somekey"))
+        db_mock = _db_trip_ok_day_fails()
         with patch.object(svc, "call_compute_routes") as mock_call:
             with pytest.raises(Exception):
                 svc.compute_route_estimate(
@@ -484,6 +544,53 @@ class TestAdapterErrorHandling:
         client = _mock_client(500, {})
         result = call_compute_routes(stops, "fake-key", http_client=client)
         assert result.estimates == []
+
+    def test_missing_duration_returns_error(self):
+        stops = _stops("a", "b")
+        body = {"routes": [{"legs": [{"distanceMeters": 1000}]}]}
+        client = _mock_client(200, body)
+        result = call_compute_routes(stops, "fake-key", http_client=client)
+        assert result.estimates == []
+        assert result.error_reason == "missing_leg_duration"
+        assert result.provider_call_count == 1
+
+    def test_invalid_duration_returns_error(self):
+        stops = _stops("a", "b")
+        body = {"routes": [{"legs": [{"duration": "not-a-duration", "distanceMeters": 1000}]}]}
+        client = _mock_client(200, body)
+        result = call_compute_routes(stops, "fake-key", http_client=client)
+        assert result.estimates == []
+        assert result.error_reason == "invalid_leg_duration"
+        assert result.provider_call_count == 1
+
+    def test_missing_distance_meters_returns_error(self):
+        stops = _stops("a", "b")
+        body = {"routes": [{"legs": [{"duration": "300s"}]}]}
+        client = _mock_client(200, body)
+        result = call_compute_routes(stops, "fake-key", http_client=client)
+        assert result.estimates == []
+        assert result.error_reason == "missing_leg_distance"
+        assert result.provider_call_count == 1
+
+    def test_fewer_legs_than_expected_returns_error(self):
+        """3 stops → 2 expected legs; provider returns 1 → leg_count_mismatch."""
+        stops = _stops("a", "b", "c")
+        body = {"routes": [{"legs": [{"duration": "300s", "distanceMeters": 1000}]}]}
+        client = _mock_client(200, body)
+        result = call_compute_routes(stops, "fake-key", http_client=client)
+        assert result.estimates == []
+        assert result.error_reason == "leg_count_mismatch"
+        assert result.provider_call_count == 1
+
+    def test_more_legs_than_expected_returns_error(self):
+        """2 stops → 1 expected leg; provider returns 2 → leg_count_mismatch."""
+        stops = _stops("a", "b")
+        body = _success_body(("300s", 1000), ("400s", 2000))
+        client = _mock_client(200, body)
+        result = call_compute_routes(stops, "fake-key", http_client=client)
+        assert result.estimates == []
+        assert result.error_reason == "leg_count_mismatch"
+        assert result.provider_call_count == 1
 
 
 class TestServiceWithRealAdapter:

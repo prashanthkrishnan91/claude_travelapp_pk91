@@ -1,20 +1,21 @@
 """Route estimate service — Route Planning v1 PR 3.
 
 Behaviour by flag + key + ownership + stop count:
-  flag=False                           → status='disabled', reason='feature_flag_disabled'
-  flag=True + key missing              → status='not_configured', reason='provider_key_missing'
-  flag=True + key present + own fail   → HTTP 404 (trip not owned / not found)
-  flag=True + key present + <2 stops   → HTTP 422
-  flag=True + key present + >10 stops  → HTTP 422
-  flag=True + key present + valid      → one ComputeRoutes call; estimates on success
-  provider error                       → status='provider_error', estimates=[]
+  flag=False                              → status='disabled', reason='feature_flag_disabled'
+  flag=True + key missing                 → status='not_configured', reason='provider_key_missing'
+  flag=True + key present + trip fail     → HTTP 404 (trip not owned / not found)
+  flag=True + key present + day fail      → HTTP 404 (day not found or belongs to different trip)
+  flag=True + key present + <2 stops      → HTTP 422
+  flag=True + key present + >10 stops     → HTTP 422
+  flag=True + key present + valid         → one ComputeRoutes call; estimates on success
+  provider error                          → status='provider_error', estimates=[]
 
 Hard safety guarantees enforced here:
 - No automatic calls; only called on explicit manual request.
 - Caller must supply lat/lng; no address lookups performed.
 - Stop order is final as supplied; never changed.
 - No ComputeRouteMatrix; no route optimization.
-- Coordinates never sent to Google until ownership is verified.
+- Coordinates never sent to Google until trip AND day ownership is verified.
 - Max 10 routable stops (v1 hard cap).
 - Adapter call count exposed in metadata.
 
@@ -55,6 +56,23 @@ def _verify_trip_ownership(db: Any, trip_id: UUID, user_id: UUID) -> None:
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Trip not found")
+
+
+def _verify_day_ownership(db: Any, trip_id: UUID, day_id: UUID) -> None:
+    """Verify day_id exists and belongs to trip_id; raises HTTP 404 if not.
+
+    Coordinates must not be sent to any provider before this check passes.
+    """
+    result = (
+        db.table("itinerary_days")
+        .select("id")
+        .eq("id", str(day_id))
+        .eq("trip_id", str(trip_id))
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Day not found")
 
 
 def compute_route_estimate(
@@ -152,6 +170,7 @@ def compute_route_estimate(
             metadata=_metadata,
         )
     _verify_trip_ownership(db, trip_id, user_id)
+    _verify_day_ownership(db, trip_id, day_id)
 
     # Make exactly one ComputeRoutes call; never a matrix or optimization call.
     adapter_result = call_compute_routes(valid_stops, api_key)
