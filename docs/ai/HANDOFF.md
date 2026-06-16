@@ -1,15 +1,23 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-16 (Route Planning v1 — provider registry skeleton)
+Last updated: 2026-06-16 (Route Planning v1 — flag-gated route-estimate endpoint shell PR 2)
 
-### Route Planning v1 — provider registry/config skeleton (in progress)
+### Route Planning v1 — flag-gated route-estimate endpoint shell (PR 2, current)
+
+`POST /itinerary/{trip_id}/days/{day_id}/route-estimate` shell added.
+Feature flag `ROUTE_ESTIMATE_V1_ENABLED=false` (default; missing env safe).
+Flag=false → `status:"disabled"`. Flag=true → `status:"not_configured"` (provider inactive).
+No live provider calls. No adapter. No SQL. No frontend/UI. No route computation.
+Accepted types: activity and meal. Flights, hotels, notes excluded with reason.
+Min 2 valid stops required. Pydantic validates lat/lng (±90/±180). Order never changed.
+`google_routes` remains `production_allowed=False`. 58 backend tests pass.
+**Next PR:** live Google Routes adapter, same endpoint, still flag-gated.
+
+### Route Planning v1 — provider registry/config skeleton (merged PR #511)
 
 `ProviderRole.ROUTE_MATRIX` added to `provider_registry.py`. `google_routes`
-registered as a disabled (`production_allowed=False`) future routing provider
-under that role. No adapter, no endpoint, no live calls, no env var required at
-runtime, no SQL, no UI. Governed by Route Planning v1 Contract ADR (PR #509).
-Focused registry tests in `backend/tests/test_routing_provider_registry.py`.
-**Next PR:** flag-gated route-estimate endpoint, fail-closed, no live call.
+registered as a disabled (`production_allowed=False`) future routing provider.
+No adapter, no endpoint, no live calls. Governed by Route Planning v1 Contract ADR (PR #509).
 
 ### Route Planning v1 Contract ADR (docs-only — merged PR #509)
 
