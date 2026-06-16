@@ -1,8 +1,22 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-16 (Route Planning v1 PR 3 — live Google Routes adapter)
+Last updated: 2026-06-16 (Route Planning v1 PR 4 — Journey Desk "Check route" UI, PR #514)
 
-### Route Planning v1 PR 3 — live Google Routes ComputeRoutes adapter (current)
+### Route Planning v1 PR 4 — Journey Desk "Check route" button (current, PR #514)
+
+Read-only "Check route" button in Journey Desk expanded day view. Calls
+`POST /itinerary/{trip_id}/days/{day_id}/route-estimate` **only on explicit
+button click** — no auto-calls on load, day switch, or item selection.
+
+Button visible when ≥2 activity/meal stops with canonical coordinates exist.
+Flights, hotels, notes excluded. Shows estimated per-leg durations/distances
+(labeled "estimated only"). 4 UI states: idle, loading, success, error.
+`GOOGLE_ROUTES_API_KEY` not referenced in frontend. Production inert by default.
+
+New: `getRouteableStopsForEstimate()` in `travelHints.ts`; `callRouteEstimate()` in
+`api.ts`; `CheckRoutePanel` in `ItineraryDayColumn.tsx`; 30 tests all pass.
+
+### Route Planning v1 PR 3 — live Google Routes ComputeRoutes adapter (PR #513)
 
 `POST /itinerary/{trip_id}/days/{day_id}/route-estimate` now makes a real
 Google Routes ComputeRoutes call when fully enabled and ownership is verified.
@@ -16,13 +30,11 @@ Adapter behavior by gate:
 - `flag=True + valid` → one ComputeRoutes call, per-leg estimates returned
 - Provider error → `provider_error`, `estimates:[]`, no fake data
 
-Safety invariants: no UI/frontend, no automatic calls, no geocoding, no reordering,
+Safety invariants: no automatic calls, no geocoding, no reordering,
 no ComputeRouteMatrix, no route optimization, no traffic-aware routing.
 Ownership verified before coordinates sent. `production_allowed=False` unchanged.
-New: `google_routes_api_key: str = ""` config field (optional, no startup failure).
-New: `backend/app/services/google_routes_adapter.py`.
-PR #513: day ownership gate added (trip + day verified before any provider call), adapter fail-closed on partial/malformed legs, defensive stop-count boundary in adapter, full live-path TestClient tests. All CI green.
-**Next PR:** read-only "Check route" button in UI behind feature flag + adapter readiness.
+New: `google_routes_api_key: str = ""` config field; `google_routes_adapter.py`.
+PR #513: day ownership gate, fail-closed adapter, live-path tests. All CI green.
 
 ### Route Planning v1 — provider registry/config skeleton (merged PR #511)
 
