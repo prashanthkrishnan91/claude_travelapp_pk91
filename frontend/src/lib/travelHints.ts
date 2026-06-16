@@ -2,6 +2,7 @@
 
 import { estimateTravel, TravelEstimate } from "./travelTime";
 import { readCanonicalLat, readCanonicalLng, hasRouteableCoordinates } from "./tripItemMetadata";
+import type { RouteableStopPayload } from "@/types";
 
 export type PairHintKind = "travel_ok" | "far_apart" | "missing_location" | "skip";
 
@@ -100,6 +101,39 @@ export function summarizeHints(hints: PairHint[]): {
     missingLocationCount,
     hasIssues: farApartCount + missingLocationCount > 0,
   };
+}
+
+interface RoutableItem {
+  id: string;
+  itemType?: string;
+  title: string;
+  details?: Record<string, unknown> | null;
+}
+
+/**
+ * Returns activity/meal stops that have canonical coordinates, in the order
+ * they appear in the day. Used only to build the route-estimate request payload
+ * on an explicit "Check route" button click — never called on load or day change.
+ */
+export function getRouteableStopsForEstimate(items: RoutableItem[]): RouteableStopPayload[] {
+  return items
+    .filter((item) => item.itemType === "activity" || item.itemType === "meal")
+    .filter((item) =>
+      hasRouteableCoordinates(item.details as Record<string, unknown> | null | undefined),
+    )
+    .map((item) => {
+      const d = item.details as Record<string, unknown> | null | undefined;
+      const stop: RouteableStopPayload = {
+        itemId: item.id,
+        title: item.title,
+        itemType: item.itemType as string,
+        lat: readCanonicalLat(d) as number,
+        lng: readCanonicalLng(d) as number,
+      };
+      if (d?.placeId) stop.placeId = d.placeId as string;
+      if (d?.providerPlaceId) stop.providerPlaceId = d.providerPlaceId as string;
+      return stop;
+    });
 }
 
 export interface RouteReadinessResult {

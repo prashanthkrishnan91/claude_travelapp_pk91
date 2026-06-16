@@ -109,6 +109,36 @@ export interface ItineraryDay {
   items: ItineraryItem[];
 }
 
+// ─── Route Estimate ───────────────────────────────────────────────────────────
+
+export interface RouteableStopPayload {
+  itemId: string;
+  title: string;
+  itemType: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+  providerPlaceId?: string;
+}
+
+export interface RouteEstimateLeg {
+  fromItemId: string;
+  toItemId: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  provider: string;
+  orderIndex: number;
+}
+
+export interface RouteEstimateResponse {
+  status: "disabled" | "not_configured" | "success" | "provider_error";
+  reason: string;
+  message: string;
+  provider: string;
+  estimates: RouteEstimateLeg[];
+  metadata: Record<string, unknown>;
+}
+
 // ─── Travel Card ─────────────────────────────────────────────────────────────
 
 export interface TravelCard {

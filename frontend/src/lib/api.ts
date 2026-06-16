@@ -29,6 +29,8 @@ import type {
   TripOptimizationResponse,
   SavedItem,
   SavedItemCreate,
+  RouteableStopPayload,
+  RouteEstimateResponse,
 } from "@/types";
 import { supabase } from "./supabase";
 import { normalizeConciergeResponse } from "./concierge/types";
@@ -406,6 +408,25 @@ export async function updateItem(
 
 export async function deleteItem(itemId: string): Promise<void> {
   await apiFetch<void>(`/itinerary/items/${itemId}`, { method: "DELETE" });
+}
+
+/**
+ * POST route estimate for a day. Called only from an explicit "Check route"
+ * button click — never on page load, day change, or item selection.
+ */
+export async function callRouteEstimate(
+  tripId: string,
+  dayId: string,
+  stops: RouteableStopPayload[],
+): Promise<RouteEstimateResponse> {
+  const payload = toSnake({ stops });
+  return apiFetch<RouteEstimateResponse>(
+    `/itinerary/${tripId}/days/${dayId}/route-estimate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function fetchTripItems(tripId: string): Promise<ItineraryItem[]> {
