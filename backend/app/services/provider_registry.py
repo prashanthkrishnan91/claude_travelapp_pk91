@@ -34,6 +34,12 @@ Disabled (production_allowed=False):
   - serper         : quarantined; use Tavily instead
   - foursquare     : disabled; enrichment covered by Yelp
   - skyscanner_flights : pending; access rejected; remains disabled
+
+Route planning provider skeleton (production_allowed=False — registry only):
+  - google_routes  : future travel-time preview provider (Route Planning v1 ADR,
+                     PR #509). Registered but disabled; no adapter, no endpoint,
+                     no live calls. Intended future env var: GOOGLE_ROUTES_API_KEY.
+                     Promotion requires adapter + flag-gated endpoint PR.
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ class ProviderRole(str, Enum):
     ENRICHMENT = "enrichment"      # optional corroboration, no card minting (Yelp)
     WEATHER = "weather"            # trip/weather context only (OpenWeather)
     LINK_OUT = "link_out"          # external link destination; no data ingestion
+    ROUTE_MATRIX = "route_matrix"   # travel-time / distance matrix (Google Routes); no map tiles, no geocoding
     DISABLED = "disabled"          # explicitly off; not approved for production
     QUARANTINED = "quarantined"    # previously scaffolded; suspended pending re-approval
     PENDING = "pending"            # preferred candidate; awaiting API key / access confirmation
@@ -270,6 +277,30 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
             "after a separate manual schedule-trust certification pass."
         ),
     ),
+    # ── Route planning provider skeleton (registry-only; no adapter, no live calls) ──
+    # Governed by Route Planning v1 Contract ADR (PR #509).
+    # v1 = manual "Check route" travel-time preview only; no auto-reorder, no Optimize
+    # Day, no geocoding, no route map, no hidden calls.
+    # Promotion path: (1) flag-gated route-estimate endpoint PR, (2) live adapter, (3)
+    # GOOGLE_ROUTES_API_KEY configured in env, (4) set production_allowed=True here.
+    "google_routes": ProviderEntry(
+        provider_id="google_routes",
+        display_name="Google Routes",
+        role=ProviderRole.ROUTE_MATRIX,
+        required_env_vars=(),
+        production_allowed=False,
+        can_create_addable_cards=False,
+        can_enrich_only=False,
+        supported_verticals=("route",),
+        cost_notes=(
+            "Registry skeleton only — no adapter, no endpoint, no live calls. "
+            "Intended future env var: GOOGLE_ROUTES_API_KEY (server-side only). "
+            "Governed by Route Planning v1 Contract ADR (PR #509). "
+            "Activation requires: flag-gated route-estimate endpoint + adapter PR, "
+            "then set production_allowed=True here. "
+            "No Optimize Day / auto-reorder / geocoding / route map in v1."
+        ),
+    ),
 }
 
 
@@ -331,4 +362,6 @@ __all__ = [
     "get_provider",
     "is_production_allowed",
     "is_provider_active",
+    # Route planning skeleton — no adapter or live calls; registry reference only
+    # "google_routes" entry is accessible via get_provider("google_routes")
 ]

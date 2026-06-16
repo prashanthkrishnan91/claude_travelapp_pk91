@@ -1,8 +1,17 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-15 (Route Planning v1 Contract ADR — docs-only)
+Last updated: 2026-06-16 (Route Planning v1 — provider registry skeleton)
 
-### Route Planning v1 Contract ADR (docs-only — open)
+### Route Planning v1 — provider registry/config skeleton (in progress)
+
+`ProviderRole.ROUTE_MATRIX` added to `provider_registry.py`. `google_routes`
+registered as a disabled (`production_allowed=False`) future routing provider
+under that role. No adapter, no endpoint, no live calls, no env var required at
+runtime, no SQL, no UI. Governed by Route Planning v1 Contract ADR (PR #509).
+Focused registry tests in `backend/tests/test_routing_provider_registry.py`.
+**Next PR:** flag-gated route-estimate endpoint, fail-closed, no live call.
+
+### Route Planning v1 Contract ADR (docs-only — merged PR #509)
 
 Decision-only design note: `docs/ai/ROUTE_PLANNING_V1_CONTRACT.md`. Gates the
 route-planning capability **before** any implementation, following the
