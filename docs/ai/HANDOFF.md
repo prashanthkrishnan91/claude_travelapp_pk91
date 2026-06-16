@@ -22,6 +22,7 @@ Ownership verified before coordinates sent. `production_allowed=False` unchanged
 New: `google_routes_api_key: str = ""` config field (optional, no startup failure).
 New: `backend/app/services/google_routes_adapter.py`.
 141 backend tests pass (all existing tests updated and passing).
+PR #513 open for review — certify CI passed; AI PR Readiness Check requires re-run after PR body update.
 **Next PR:** read-only "Check route" button in UI behind feature flag + adapter readiness.
 
 ### Route Planning v1 — provider registry/config skeleton (merged PR #511)
