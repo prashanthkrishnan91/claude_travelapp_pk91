@@ -68,7 +68,18 @@ if _deps_stub is None:
 
 _deps_stub.get_current_user_id = _stub_get_current_user_id
 _deps_stub.CurrentUserID = Annotated[UUID, Depends(_stub_get_current_user_id)]
-_deps_stub.DB = MagicMock()
+
+# DB stub: real Annotated type so FastAPI can resolve the dependency.
+# Tests with key="" return before calling the db, so the mock db is never queried
+# in the existing flag-disabled/key-missing test paths.
+_mock_db = MagicMock()
+
+
+def _stub_get_db() -> MagicMock:
+    return _mock_db
+
+
+_deps_stub.DB = Annotated[MagicMock, Depends(_stub_get_db)]
 
 # ── Load app.routes.route_estimate directly (bypass __init__.py) ─────────────
 _re_path = pathlib.Path(__file__).parent.parent / "app" / "routes" / "route_estimate.py"
@@ -104,9 +115,10 @@ _STOP_B = {"item_id": "b", "title": "Stop B", "item_type": "meal",     "lat": 25
 _VALID_BODY = {"stops": [_STOP_A, _STOP_B]}
 
 
-def _settings(enabled: bool) -> MagicMock:
+def _settings(enabled: bool, key: str = "") -> MagicMock:
     s = MagicMock()
     s.route_estimate_v1_enabled = enabled
+    s.google_routes_api_key = key
     return s
 
 
@@ -166,28 +178,28 @@ class TestAuthenticatedFlagDisabled:
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["estimates"] == []
 
 
-# ── Tests: authenticated, flag=true, valid stops ─────────────────────────────
+# ── Tests: authenticated, flag=true, key missing ─────────────────────────────
 
 
-class TestAuthenticatedFlagEnabled:
+class TestAuthenticatedFlagEnabledKeyMissing:
     def test_returns_200(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).status_code == 200
 
     def test_status_is_not_configured(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["status"] == "not_configured"
 
-    def test_reason_is_provider_not_implemented(self, monkeypatch):
+    def test_reason_is_provider_key_missing(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
-        assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["reason"] == "provider_not_implemented"
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
+        assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["reason"] == "provider_key_missing"
 
     def test_estimates_empty(self, monkeypatch):
         import app.services.route_estimate as svc
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         assert _auth_client.post(_ROUTE_URL, json=_VALID_BODY).json()["estimates"] == []
 
 

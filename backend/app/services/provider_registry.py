@@ -277,12 +277,15 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
             "after a separate manual schedule-trust certification pass."
         ),
     ),
-    # ── Route planning provider skeleton (registry-only; no adapter, no live calls) ──
+    # ── Route planning provider (PR 3: live ComputeRoutes adapter, flag-gated) ──
     # Governed by Route Planning v1 Contract ADR (PR #509).
     # v1 = manual "Check route" travel-time preview only; no auto-reorder, no Optimize
     # Day, no geocoding, no route map, no hidden calls.
-    # Promotion path: (1) flag-gated route-estimate endpoint PR, (2) live adapter, (3)
-    # GOOGLE_ROUTES_API_KEY configured in env, (4) set production_allowed=True here.
+    # Adapter readiness gate: ROUTE_ESTIMATE_V1_ENABLED=true + GOOGLE_ROUTES_API_KEY set.
+    # production_allowed=False is intentional; adapter readiness is controlled separately
+    # via the feature flag + env key. Do not set production_allowed=True until a full
+    # production promotion review has been done.
+    # required_env_vars=() so missing key never breaks startup (checked at call time).
     "google_routes": ProviderEntry(
         provider_id="google_routes",
         display_name="Google Routes",
@@ -293,12 +296,12 @@ PROVIDER_REGISTRY: dict[str, ProviderEntry] = {
         can_enrich_only=False,
         supported_verticals=("route",),
         cost_notes=(
-            "Registry skeleton only — no adapter, no endpoint, no live calls. "
-            "Intended future env var: GOOGLE_ROUTES_API_KEY (server-side only). "
-            "Governed by Route Planning v1 Contract ADR (PR #509). "
-            "Activation requires: flag-gated route-estimate endpoint + adapter PR, "
-            "then set production_allowed=True here. "
-            "No Optimize Day / auto-reorder / geocoding / route map in v1."
+            "ComputeRoutes adapter live (PR 3). Gated by ROUTE_ESTIMATE_V1_ENABLED + "
+            "GOOGLE_ROUTES_API_KEY. production_allowed=False intentional: adapter "
+            "readiness uses feature flag + key rather than this registry flag. "
+            "Max 10 stops per call. One call per manual request. No matrix, no "
+            "optimization, no geocoding, no traffic-aware routing in v1. "
+            "Governed by Route Planning v1 Contract ADR (PR #509)."
         ),
     ),
 }

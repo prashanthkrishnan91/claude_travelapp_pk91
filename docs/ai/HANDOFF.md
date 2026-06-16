@@ -1,17 +1,28 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-16 (Route Planning v1 — flag-gated route-estimate endpoint shell PR 2)
+Last updated: 2026-06-16 (Route Planning v1 PR 3 — live Google Routes adapter)
 
-### Route Planning v1 — flag-gated route-estimate endpoint shell (PR 2, current)
+### Route Planning v1 PR 3 — live Google Routes ComputeRoutes adapter (current)
 
-`POST /itinerary/{trip_id}/days/{day_id}/route-estimate` shell added.
-Feature flag `ROUTE_ESTIMATE_V1_ENABLED=false` (default; missing env safe).
-Flag=false → `status:"disabled"`. Flag=true → `status:"not_configured"` (provider inactive).
-No live provider calls. No adapter. No SQL. No frontend/UI. No route computation.
-Accepted types: activity and meal. Flights, hotels, notes excluded with reason.
-Min 2 valid stops required. Pydantic validates lat/lng (±90/±180). Order never changed.
-`google_routes` remains `production_allowed=False`. 58 backend tests pass.
-**Next PR:** live Google Routes adapter, same endpoint, still flag-gated.
+`POST /itinerary/{trip_id}/days/{day_id}/route-estimate` now makes a real
+Google Routes ComputeRoutes call when fully enabled and ownership is verified.
+
+Adapter behavior by gate:
+- `flag=False` → `disabled` (no provider call)
+- `flag=True + key missing` → `not_configured` / `provider_key_missing`
+- `flag=True + key present + ownership fail` → HTTP 404 (no provider call)
+- `flag=True + <2 valid stops` → HTTP 422 (no provider call)
+- `flag=True + >10 valid stops` → HTTP 422 (v1 hard cap)
+- `flag=True + valid` → one ComputeRoutes call, per-leg estimates returned
+- Provider error → `provider_error`, `estimates:[]`, no fake data
+
+Safety invariants: no UI/frontend, no automatic calls, no geocoding, no reordering,
+no ComputeRouteMatrix, no route optimization, no traffic-aware routing.
+Ownership verified before coordinates sent. `production_allowed=False` unchanged.
+New: `google_routes_api_key: str = ""` config field (optional, no startup failure).
+New: `backend/app/services/google_routes_adapter.py`.
+141 backend tests pass (all existing tests updated and passing).
+**Next PR:** read-only "Check route" button in UI behind feature flag + adapter readiness.
 
 ### Route Planning v1 — provider registry/config skeleton (merged PR #511)
 

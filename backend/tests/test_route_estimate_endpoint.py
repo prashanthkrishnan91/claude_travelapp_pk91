@@ -1,18 +1,19 @@
-"""Route estimate endpoint tests — Route Planning v1 PR 2.
+"""Route estimate service-level tests — Route Planning v1.
 
 Governed by Route Planning v1 Contract ADR (PR #509).
 
 Proves:
 - Feature flag default False → disabled response.
 - Missing env does not break import/startup.
-- Enabled flag returns not_configured / provider_not_implemented (no live call).
-- google_routes is read from provider registry but never called.
+- Enabled flag + key missing → not_configured / provider_key_missing (no live call).
+- google_routes is read from provider registry but not active via is_provider_active.
 - Invalid lat/lng rejected by Pydantic input validation.
 - Fewer than 2 valid stops rejected.
+- More than 10 valid stops rejected (v1 cap).
 - Flights, hotels, notes excluded with reason.
 - Valid activity/meal stops preserve manual order in response metadata.
-- No estimates or travel times are fabricated.
-- No route optimization / reorder / geocoding / haversine symbols introduced.
+- No estimates or travel times are fabricated when key is absent.
+- No route optimization / reorder / geocoding / haversine symbols in service source.
 """
 from __future__ import annotations
 
@@ -40,9 +41,10 @@ def _req(*stops: RouteableStop) -> RouteEstimateRequest:
     return RouteEstimateRequest(stops=list(stops))
 
 
-def _settings(enabled: bool) -> MagicMock:
+def _settings(enabled: bool, key: str = "") -> MagicMock:
     s = MagicMock()
     s.route_estimate_v1_enabled = enabled
+    s.google_routes_api_key = key
     return s
 
 
@@ -95,31 +97,31 @@ class TestMissingEnvDoesNotBreakStartup:
         import app.services.route_estimate  # noqa: F401 — must not raise
 
 
-# ── enabled flag → provider_not_implemented ───────────────────────────────────
+# ── enabled flag + key missing → not_configured ───────────────────────────────
 
 
-class TestEnabledFlagProviderNotImplemented:
-    def test_enabled_returns_not_configured(self, monkeypatch):
+class TestEnabledFlagKeyMissing:
+    def test_enabled_no_key_returns_not_configured(self, monkeypatch):
         svc = _svc_mod()
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         resp = svc.compute_route_estimate(_req(_stop("a"), _stop("b")), uuid4(), uuid4())
         assert resp.status == "not_configured"
 
-    def test_enabled_returns_provider_not_implemented_reason(self, monkeypatch):
+    def test_enabled_no_key_returns_provider_key_missing_reason(self, monkeypatch):
         svc = _svc_mod()
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         resp = svc.compute_route_estimate(_req(_stop("a"), _stop("b")), uuid4(), uuid4())
-        assert resp.reason == "provider_not_implemented"
+        assert resp.reason == "provider_key_missing"
 
-    def test_enabled_provider_is_google_routes(self, monkeypatch):
+    def test_enabled_no_key_provider_is_google_routes(self, monkeypatch):
         svc = _svc_mod()
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         resp = svc.compute_route_estimate(_req(_stop("a"), _stop("b")), uuid4(), uuid4())
         assert resp.provider == "google_routes"
 
-    def test_enabled_estimates_empty(self, monkeypatch):
+    def test_enabled_no_key_estimates_empty(self, monkeypatch):
         svc = _svc_mod()
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key=""))
         resp = svc.compute_route_estimate(_req(_stop("a"), _stop("b")), uuid4(), uuid4())
         assert resp.estimates == []
 

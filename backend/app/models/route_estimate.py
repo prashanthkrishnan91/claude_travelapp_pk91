@@ -1,8 +1,8 @@
-"""Route estimate request/response models — Route Planning v1 PR 2.
+"""Route estimate request/response models — Route Planning v1.
 
 Governed by Route Planning v1 Contract ADR (PR #509).
 Accepted stop types: activity and meal only. Flights, hotels, and notes are excluded.
-No travel-time values, no fabricated coordinates, no reordering.
+No fabricated coordinates, no reordering, no geocoding.
 """
 from __future__ import annotations
 
@@ -39,16 +39,33 @@ class ExcludedStop(BaseModel):
     reason: str
 
 
-class RouteEstimateResponse(BaseModel):
-    """Fail-closed route estimate response.
+class RouteEstimate(BaseModel):
+    """A single leg estimate from the Google Routes adapter.
 
-    In this implementation estimates is always an empty list.
-    No travel times, distances, or durations are computed or fabricated.
+    duration_seconds and distance_meters come from the provider only.
+    No fabricated or haversine-derived values.
     """
 
-    status: str  # "disabled" | "not_configured"
+    from_item_id: str
+    to_item_id: str
+    distance_meters: int
+    duration_seconds: int
+    provider: str = "google_routes"
+    source: str = "google_routes"
+    estimated: bool = True
+    order_index: int
+
+
+class RouteEstimateResponse(BaseModel):
+    """Route estimate response.
+
+    status values: "disabled" | "not_configured" | "success" | "provider_error"
+    estimates is non-empty only when status == "success" and the provider returned data.
+    """
+
+    status: str
     reason: str  # machine-readable reason code
     message: str  # user-safe explanation
-    provider: str  # "google_routes" — future candidate only, never called in this PR
+    provider: str
     estimates: List[Any] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
