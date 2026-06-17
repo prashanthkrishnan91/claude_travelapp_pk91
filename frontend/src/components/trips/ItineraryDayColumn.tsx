@@ -6,13 +6,13 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
-import { ItineraryDay, ItineraryItem } from "@/types";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Navigation, Plus, Sparkles, X } from "lucide-react";
+import { ItineraryDay, ItineraryItem, RouteEstimateLeg } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
-import { computeAdjacentHints, computeRouteReadiness, summarizeHints } from "@/lib/travelHints";
-import { suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
+import { computeAdjacentHints, computeRouteReadiness, getRouteableStopsForEstimate, summarizeHints } from "@/lib/travelHints";
+import { callRouteEstimate, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
 
@@ -360,6 +360,133 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
     <div className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1.5">
       <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" />
       <span className="text-[10px] text-ds-folio-ink-mist leading-tight">{message} Rough hints only.</span>
+    </div>
+  );
+}
+
+// ─── CheckRoutePanel ──────────────────────────────────────────────────────────
+
+type CheckRoutePhase =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "success"; estimates: RouteEstimateLeg[]; stopTitles: Map<string, string> }
+  | { phase: "error"; message: string };
+
+function formatRouteDuration(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  return rem > 0 ? `${hours}h ${rem}m` : `${hours}h`;
+}
+
+function formatRouteDistance(meters: number): string {
+  if (meters < 1000) return `${meters} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function CheckRoutePanel({ items, tripId, dayId }: { items: ItineraryItem[]; tripId: string; dayId: string }) {
+  const [state, setState] = useState<CheckRoutePhase>({ phase: "idle" });
+
+  const routableStops = useMemo(() => getRouteableStopsForEstimate(items), [items]);
+
+  useEffect(() => {
+    setState({ phase: "idle" });
+  }, [items]);
+
+  if (routableStops.length < 2) return null;
+
+  const handleCheckRoute = async () => {
+    setState({ phase: "loading" });
+    try {
+      const response = await callRouteEstimate(tripId, dayId, routableStops);
+      if (response.status === "success" && response.estimates.length > 0) {
+        const stopTitles = new Map(routableStops.map((s) => [s.itemId, s.title]));
+        setState({ phase: "success", estimates: response.estimates, stopTitles });
+      } else {
+        setState({ phase: "error", message: response.message || "Route estimate unavailable." });
+      }
+    } catch {
+      setState({ phase: "error", message: "Route estimate unavailable. Please try again." });
+    }
+  };
+
+  const dismissBtnClass =
+    "flex items-center justify-center min-w-[44px] min-h-[44px] -mr-1 rounded text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
+
+  if (state.phase === "loading") {
+    return (
+      <div
+        data-testid="check-route-loading"
+        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+      >
+        <Loader2 className="w-3 h-3 text-ds-folio-ink-mist animate-spin flex-shrink-0" aria-hidden="true" />
+        <span className="text-[10px] text-ds-folio-ink-mist">Estimating route…</span>
+      </div>
+    );
+  }
+
+  if (state.phase === "success") {
+    const sorted = [...state.estimates].sort((a, b) => a.orderIndex - b.orderIndex);
+    return (
+      <div
+        data-testid="check-route-result"
+        className="rounded-lg bg-ds-linen border border-ds-hairline mt-1 overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-2 py-1.5 border-b border-ds-hairline/50">
+          <div className="flex items-center gap-1.5">
+            <Navigation className="w-3 h-3 text-ds-marine-ink flex-shrink-0" aria-hidden="true" />
+            <span className="text-[10px] font-semibold text-ds-folio-ink">Route estimate</span>
+            <span className="text-[10px] text-ds-folio-ink-mist italic">· estimated only</span>
+          </div>
+          <button onClick={() => setState({ phase: "idle" })} aria-label="Clear route estimate" className={dismissBtnClass}>
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="px-2 py-1.5 space-y-1">
+          {sorted.map((leg) => {
+            const from = state.stopTitles.get(leg.fromItemId) ?? leg.fromItemId;
+            const to = state.stopTitles.get(leg.toItemId) ?? leg.toItemId;
+            return (
+              <div key={`${leg.fromItemId}-${leg.toItemId}`} className="flex items-baseline gap-1.5 text-[10px]">
+                <span className="text-ds-folio-ink-mist/50 flex-shrink-0" aria-hidden="true">·</span>
+                <span className="text-ds-folio-ink-soft truncate flex-1">{from} → {to}</span>
+                <span className="text-ds-marine-ink font-medium flex-shrink-0">~{formatRouteDuration(leg.durationSeconds)}</span>
+                <span className="text-ds-folio-ink-mist/60 flex-shrink-0">{formatRouteDistance(leg.distanceMeters)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "error") {
+    return (
+      <div
+        data-testid="check-route-error"
+        className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+      >
+        <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
+        <span className="text-[10px] text-ds-folio-ink-mist leading-tight flex-1">{state.message}</span>
+        <button onClick={() => setState({ phase: "idle" })} aria-label="Dismiss" className={dismissBtnClass}>
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  // idle
+  return (
+    <div className="flex justify-end mt-1" data-testid="check-route-idle">
+      <button
+        data-testid="check-route-btn"
+        onClick={handleCheckRoute}
+        className="flex items-center gap-1.5 px-2.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
+      >
+        <Navigation className="w-3 h-3" aria-hidden="true" />
+        Check route
+      </button>
     </div>
   );
 }
@@ -816,6 +943,7 @@ export function ItineraryDayColumn({
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
+          <CheckRoutePanel items={visibleItems} tripId={day.tripId} dayId={day.id} />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (
