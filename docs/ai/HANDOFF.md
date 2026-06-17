@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-16 (Route Planning v1 PR 4 — Journey Desk "Check route" UI, PR #514)
+Last updated: 2026-06-17 (Route Planning v1 PR 4 — Journey Desk "Check route" UI, PR #514)
 
 ### Route Planning v1 PR 4 — Journey Desk "Check route" button (current, PR #514)
 
