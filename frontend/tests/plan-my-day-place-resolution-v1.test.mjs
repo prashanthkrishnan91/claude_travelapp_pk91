@@ -131,3 +131,124 @@ test("addAttraction/addRestaurant only persist identity when present (?? null)",
   assert.match(apiSrc, /place_id: attraction\.placeId \?\? null/);
   assert.match(apiSrc, /place_id: restaurant\.placeId \?\? null/);
 });
+
+// ---------------------------------------------------------------------------
+// 7. Coordinate pass-through — lat/lng persist when present.
+//    Acceptance criteria: "Plan My Day attraction with lat/lng persists
+//    canonical coords" / "Plan My Day restaurant/meal with lat/lng persists
+//    canonical coords".
+// ---------------------------------------------------------------------------
+
+test("addAttractionToDay writes attraction.lat ?? null into baseDetails.lat", () => {
+  // When the Plan My Day upstream response carries lat (from Google Places
+  // resolution or bulk search), addAttractionToDay reads attraction.lat
+  // directly. ?? null ensures: real number passes through; absent → null.
+  const block = apiSrc.split("export async function addAttractionToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lat: attraction\.lat \?\? null/);
+});
+
+test("addAttractionToDay writes attraction.lng ?? null into baseDetails.lng", () => {
+  const block = apiSrc.split("export async function addAttractionToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lng: attraction\.lng \?\? null/);
+});
+
+test("addRestaurantToDay writes restaurant.lat ?? null into baseDetails.lat", () => {
+  const block = apiSrc.split("export async function addRestaurantToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lat: restaurant\.lat \?\? null/);
+});
+
+test("addRestaurantToDay writes restaurant.lng ?? null into baseDetails.lng", () => {
+  const block = apiSrc.split("export async function addRestaurantToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lng: restaurant\.lng \?\? null/);
+});
+
+// ---------------------------------------------------------------------------
+// 8. Honest fallback — ?? null, not ?? 0 / not geocoded.
+//    Acceptance criteria: "Plan My Day does not fabricate coordinates when
+//    none exist" / "Missing-coord upstream result remains honest fallback".
+// ---------------------------------------------------------------------------
+
+test("addAttractionToDay lat/lng fallback is null — no fabricated zeros or geocoding", () => {
+  const block = apiSrc.split("export async function addAttractionToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lat: attraction\.lat \?\? null/);
+  assert.doesNotMatch(block, /lat: attraction\.lat \?\? 0\b/);
+  assert.doesNotMatch(block, /geocode/i);
+});
+
+test("addRestaurantToDay lat/lng fallback is null — no fabricated zeros or geocoding", () => {
+  const block = apiSrc.split("export async function addRestaurantToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /lat: restaurant\.lat \?\? null/);
+  assert.doesNotMatch(block, /lat: restaurant\.lat \?\? 0\b/);
+  assert.doesNotMatch(block, /geocode/i);
+});
+
+// ---------------------------------------------------------------------------
+// 9. gp- prefix safety — placeId (not id) is used for place_id persistence.
+//    Acceptance criteria: "gp- prefixed place id does not cause metadata
+//    recovery failure if a canonical source item exists".
+//
+//    search_attraction_results stamps id="gp-{place_id}" but place_id="{place_id}"
+//    separately. addAttractionToDay must persist the clean placeId field, not
+//    the gp-prefixed id — so the persisted place_id stays usable for map links
+//    and route readiness without the "gp-" prefix leaking.
+// ---------------------------------------------------------------------------
+
+test("addAttractionToDay uses attraction.placeId (not attraction.id) for place_id — gp-prefix safe", () => {
+  const block = apiSrc.split("export async function addAttractionToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /place_id: attraction\.placeId \?\? null/);
+  assert.doesNotMatch(block, /place_id: attraction\.id/);
+});
+
+test("addRestaurantToDay uses restaurant.placeId (not restaurant.id) for place_id — gp-prefix safe", () => {
+  const block = apiSrc.split("export async function addRestaurantToDay")[1]
+    .split("export async function")[0];
+  assert.match(block, /place_id: restaurant\.placeId \?\? null/);
+  assert.doesNotMatch(block, /place_id: restaurant\.id/);
+});
+
+// ---------------------------------------------------------------------------
+// 10. Build / Concierge / Saved / Ideas regression.
+//     Acceptance criteria: "Existing working add paths are regression-protected".
+// ---------------------------------------------------------------------------
+
+test("Concierge add: addStructuredConciergeItemToTrip still uses normalizeGoogleVerificationDetails", () => {
+  // Regression guard: the Concierge add path spreads lat/lng/placeId from
+  // googleVerification via this helper. Plan My Day changes must not disturb it.
+  const block = apiSrc.split("export async function addStructuredConciergeItemToTrip")[1]
+    .split("export async function")[0];
+  assert.match(block, /normalizeGoogleVerificationDetails\(item\)/);
+});
+
+test("Ideas path: saveToTripIdeas still uses normalizeGoogleVerificationDetails", () => {
+  const block = apiSrc.split("export async function saveToTripIdeas")[1]
+    .split("export async function")[0];
+  assert.match(block, /normalizeGoogleVerificationDetails\(item\)/);
+});
+
+test("Saved path: addSavedItemToTrip still persists lat/lng from snapshot coordinates", () => {
+  const fnStart = apiSrc.indexOf("export async function addSavedItemToTrip");
+  assert.ok(fnStart > -1, "addSavedItemToTrip must exist");
+  const slice = apiSrc.slice(fnStart, fnStart + 2500);
+  assert.match(slice, /details\.lat\s*=\s*savedCoords\.lat/);
+  assert.match(slice, /details\.lng\s*=\s*savedCoords\.lng/);
+});
+
+test("Build path: handlePlanAddAttraction does NOT read candidateSourceItemsRef (v1.4 revert guard)", () => {
+  // Regression guard: Plan My Day handler must NOT recover coords from
+  // candidateSourceItemsRef (reverted in v1.4 to protect Build regression).
+  // Plan My Day relies on upstream server-side resolution, not the local cache.
+  const planBlock = tripBuilderSrc.split("handlePlanAddAttraction")[1]
+    .split("handlePlanAddRestaurant")[0];
+  assert.doesNotMatch(
+    planBlock,
+    /candidateSourceItemsRef/,
+    "handlePlanAddAttraction must NOT read candidateSourceItemsRef (v1.4 revert contract)",
+  );
+});

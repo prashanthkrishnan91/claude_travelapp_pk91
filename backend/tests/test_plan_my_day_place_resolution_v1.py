@@ -245,3 +245,40 @@ def test_search_attraction_results_stamps_place_identity():
     body = src.split("def search_attraction_results", 1)[1].split("\n    def ", 1)[0]
     assert "place_id=place_id" in body
     assert "google_maps_uri=place.get" in body
+
+
+# ---------------------------------------------------------------------------
+# 6. Coordinate pass-through — lat/lng persisted in both plan route paths.
+#    Acceptance criteria: "Plan My Day attraction/restaurant with lat/lng
+#    persists canonical coords."
+# ---------------------------------------------------------------------------
+
+def test_plan_route_forwards_attraction_lat_lng():
+    """Non-cluster path passes attraction lat/lng into PlannedAttraction."""
+    src = inspect.getsource(plan_routes)
+    assert "lat=a.lat" in src
+    assert "lng=a.lng" in src
+
+
+def test_plan_route_forwards_restaurant_lat_lng():
+    """Non-cluster path passes lunch/dinner lat/lng into PlannedRestaurant."""
+    src = inspect.getsource(plan_routes)
+    assert "lat=lunch.lat" in src
+    assert "lng=lunch.lng" in src
+    assert "lat=dinner.lat" in src
+    assert "lng=dinner.lng" in src
+
+
+def test_cluster_path_does_not_forward_null_island_coords():
+    """Cluster path guards against 0.0 default — no null-island coordinates."""
+    src = inspect.getsource(plan_routes)
+    assert "lat=(a.lat if a.lat else None)" in src
+    assert "lng=(a.lng if a.lng else None)" in src
+
+
+def test_search_attraction_results_stamps_lat_lng():
+    """search_attraction_results stamps lat/lng from the place dict."""
+    src = _read_search_service_src()
+    body = src.split("def search_attraction_results", 1)[1].split("\n    def ", 1)[0]
+    assert 'lat=place.get("lat")' in body
+    assert 'lng=place.get("lng")' in body

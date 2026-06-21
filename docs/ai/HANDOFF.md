@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-17 (Route Planning v1 PR 4 — Journey Desk "Check route" UI, PR #514)
+Last updated: 2026-06-21 (Plan My Day coordinate audit + expanded test coverage, branch claude/plan-my-day-coordinates-pv5n48)
 
 ### Route Planning v1 PR 4 — Journey Desk "Check route" button (current, PR #514)
 
@@ -101,7 +101,7 @@ Display-only. Added `computeRouteReadiness` to `travelHints.ts` (filters activit
 
 **No SQL** (coords/identity ride the existing `details` JSON). **No new provider architecture** (reuses Google Places). **No fabricated coordinates/place ids/travel times.** **No Journey Desk / scheduling / hotel-stay-span / Concierge-Build refactor.**
 
-**Tests:** new `backend/tests/test_plan_my_day_place_resolution_v1.py` (model identity fields; route forwards identity + runs resolution on both paths; `_place_id_of` explicit/gp-prefix/none; `_resolve_day_plan_coords` fills on success, keeps honest fallback on failure, skips already-coord + identity-less items; `resolve_place_details` reuses existing provider + fails closed + never fabricates — source-scan for the FastAPI-chain parts). New `frontend/tests/plan-my-day-place-resolution-v1.test.mjs` (14 tests). Frontend 75/75 on the targeted parity+travel-hints run; related suites (itinerary-coordinates/journey-desk-map/smart-timeline/itinerary-timeline/hotel-itinerary/flights-oneway) 122/122. Backend tests CI-validated (FastAPI/supabase chain absent locally — pure resolution logic verified standalone). Test tier: Tier 1–2 (contract + targeted regression + provider behavior).
+**Tests (extended in coordinate audit branch):** `backend/tests/test_plan_my_day_place_resolution_v1.py` — original 20 tests + 4 new coordinate pass-through / null-island guard / search lat-lng stamp tests (24 total). `frontend/tests/plan-my-day-place-resolution-v1.test.mjs` — original 10 tests + 12 new focused tests covering: coordinate pass-through (`lat: attraction.lat ?? null` / `lng`) for both attraction and restaurant; honest fallback (`?? null` not `?? 0`, no geocoding); gp- prefix safety (`placeId` not `id` used for `place_id`); Build/Concierge/Saved/Ideas regression guards (22 total). All 22 frontend tests pass. All 57 travel-hints + trip-item-metadata-parity tests pass. Backend tests CI-validated (FastAPI/supabase chain absent locally — pure source-scan + standalone resolution logic verified in CI). Test tier: Tier 1–2 (contract + targeted regression + coordinate pass-through invariants).
 
 ### (prior) Trip Item Metadata Parity v1.4 REVERTED — restored Build/CandidatePanel last-known-good (PR #499 follow-up)
 
