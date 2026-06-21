@@ -37,11 +37,12 @@ Run all of the following before enabling in any environment:
           backend/tests/test_routing_provider_registry.py -v
    ```
 
-5. **Run the frontend route-estimate tests:**
+5. **Run the frontend route-estimate tests** (run from the `frontend/` directory):
    ```
-   npx vitest run frontend/tests/route-estimate-check-route.test.mjs
-   npx vitest run frontend/tests/route-readiness-status.test.mjs
+   node --test tests/route-estimate-check-route.test.mjs
+   node --test tests/route-readiness-status.test.mjs
    ```
+   Note: `route-readiness-status.test.mjs` is also covered by `npm test`. `route-estimate-check-route.test.mjs` must be run directly via `node --test` as it is not included in the main `npm test` script.
 
 6. **Confirm no automatic calls.** The `callRouteEstimate` function in `frontend/src/lib/api.ts` must be invoked only from the `onClick` handler of the "Check route" button. Verify no `useEffect` calls it (the only `useEffect` in `CheckRoutePanel` resets state to `"idle"` — it does not call the API).
 
@@ -55,10 +56,11 @@ After enabling `ROUTE_ESTIMATE_V1_ENABLED=true` and setting `GOOGLE_ROUTES_API_K
 
 ### Step 1 — Verify disabled path is gone
 
-With both vars set, make a direct API call and confirm `status` is NOT `"disabled"`:
+With both vars set, call the **backend API directly** (FastAPI / Railway preview URL). The route-estimate endpoint is a FastAPI route served by the backend — it is not served by the Vercel frontend. The frontend calls it via `NEXT_PUBLIC_API_URL` (defaults to `http://127.0.0.1:8000` locally; use the Railway preview URL in a deployed preview environment).
+
 ```bash
 curl -X POST \
-  https://<preview-url>/itinerary/<trip_id>/days/<day_id>/route-estimate \
+  https://<railway-backend-preview-url>/itinerary/<trip_id>/days/<day_id>/route-estimate \
   -H "Authorization: Bearer <valid_token>" \
   -H "Content-Type: application/json" \
   -d '{"stops": [
