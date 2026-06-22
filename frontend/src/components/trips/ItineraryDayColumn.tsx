@@ -538,9 +538,9 @@ export function ItineraryDayColumn({
     [day.items, showAllItems, itemOverrides, suppressedHotelItemIds]
   );
 
-  // Stable key of routable stop IDs — only re-fetches when the routable pair set changes
+  // Stable key encoding stop IDs + coordinates — re-fetches when the stop set or any location changes
   const routableStops = useMemo(() => getRouteableStopsForEstimate(visibleItems), [visibleItems]);
-  const routableStopsKey = routableStops.map((s) => s.itemId).join(",");
+  const routableStopsKey = routableStops.map((s) => `${s.itemId}:${s.lat},${s.lng}`).join("|");
 
   useEffect(() => {
     if (routableStops.length < 2) {
