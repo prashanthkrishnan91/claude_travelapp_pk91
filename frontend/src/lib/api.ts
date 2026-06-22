@@ -411,8 +411,8 @@ export async function deleteItem(itemId: string): Promise<void> {
 }
 
 /**
- * POST route estimate for a day. Called only from an explicit "Check route"
- * button click — never on page load, day change, or item selection.
+ * POST route estimate for a day. Used to populate inline connector timings
+ * when the routable stop set for a day changes.
  */
 export async function callRouteEstimate(
   tripId: string,

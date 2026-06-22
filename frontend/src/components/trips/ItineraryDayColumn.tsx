@@ -6,7 +6,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Navigation, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ItineraryDay, ItineraryItem, RouteEstimateLeg } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
@@ -109,6 +109,7 @@ interface TimelineSectionsProps {
   compareSet?: Set<string>;
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void;
   onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>;
+  routeLegs?: RouteEstimateLeg[];
 }
 
 function renderItemsWithConnectors(
@@ -120,6 +121,7 @@ function renderItemsWithConnectors(
   compareSet?: Set<string>,
   onUpdateTimeline?: (updatedItem: ItineraryItem) => void,
   onSaveHotelDates?: (itemId: string, currentDetails: Record<string, unknown>, patch: { checkIn?: string; checkOut?: string }) => Promise<ItineraryItem>,
+  routeLegs?: RouteEstimateLeg[],
 ) {
   const hints = computeAdjacentHints(items);
   return items.flatMap((item, idx) => {
@@ -137,6 +139,7 @@ function renderItemsWithConnectors(
     );
     if (idx >= items.length - 1) return [card];
     const hint = hints[idx];
+    const nextItem = items[idx + 1];
     let connector: React.ReactNode;
     if (hint.kind === "skip") {
       connector = (
@@ -152,42 +155,59 @@ function renderItemsWithConnectors(
           <span className="text-[10px] text-ds-folio-ink-mist leading-snug italic">{hint.label}</span>
         </div>
       );
-    } else if (hint.kind === "far_apart") {
-      const est = hint.estimate!;
-      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
-      const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
-      connector = (
-        <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
-          <div className="flex items-center gap-1.5">
+    } else {
+      // For travel_ok / far_apart: prefer Google Routes leg when available
+      const googleLeg = routeLegs?.find(
+        (leg) => leg.fromItemId === item.id && leg.toItemId === nextItem.id,
+      );
+      if (googleLeg) {
+        const durationMin = Math.round(googleLeg.durationSeconds / 60);
+        const distKm = (googleLeg.distanceMeters / 1000).toFixed(1);
+        connector = (
+          <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1" data-testid="route-connector-google">
+            <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
+            <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+            <span className="text-[10px] text-ds-folio-ink-mist leading-snug">~{durationMin} min drive</span>
+            <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {distKm} km</span>
+          </div>
+        );
+      } else if (hint.kind === "far_apart") {
+        const est = hint.estimate!;
+        const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+        const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
+        connector = (
+          <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
+              {mode === "walk" ? (
+                <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+              ) : (
+                <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+              )}
+              <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{timeLabel}</span>
+              <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
+            </div>
+            <div className="flex items-center gap-1 pl-[29px] pr-1">
+              <span className="text-[10px] text-ds-warning/70 leading-snug">{hint.label}</span>
+            </div>
+          </div>
+        );
+      } else {
+        const est = hint.estimate!;
+        const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+        connector = (
+          <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
             <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
             {mode === "walk" ? (
               <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
             ) : (
               <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
             )}
-            <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{timeLabel}</span>
+            <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{hint.label}</span>
             <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
           </div>
-          <div className="flex items-center gap-1 pl-[29px] pr-1">
-            <span className="text-[10px] text-ds-warning/70 leading-snug">{hint.label}</span>
-          </div>
-        </div>
-      );
-    } else {
-      const est = hint.estimate!;
-      const mode = est.walkMinutes <= 20 ? "walk" : "drive";
-      connector = (
-        <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
-          <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
-          {mode === "walk" ? (
-            <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-          ) : (
-            <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-          )}
-          <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{hint.label}</span>
-          <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
-        </div>
-      );
+        );
+      }
     }
     return [card, connector];
   });
@@ -202,6 +222,7 @@ function TimelineSections({
   compareSet,
   onUpdateTimeline,
   onSaveHotelDates,
+  routeLegs,
 }: TimelineSectionsProps) {
   const grouped = groupByDayPart(items);
   const hasTimedItems =
@@ -222,7 +243,7 @@ function TimelineSections({
           </span>
         </div>
         <div className="space-y-2">
-          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates)}
+          {renderItemsWithConnectors(items, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates, routeLegs)}
         </div>
       </div>
     );
@@ -253,7 +274,7 @@ function TimelineSections({
               <span className="text-[10px] text-ds-folio-ink-mist italic">{meta.timeHint}</span>
             </div>
             <div className="space-y-2">
-              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates)}
+              {renderItemsWithConnectors(sectionItems, dayId, onRemoveItem, onMoveItemToIdeas, onToggleCompare, compareSet, onUpdateTimeline, onSaveHotelDates, routeLegs)}
             </div>
           </div>
         );
@@ -364,133 +385,6 @@ function DayTravelHintBar({ items }: { items: ItineraryItem[] }) {
   );
 }
 
-// ─── CheckRoutePanel ──────────────────────────────────────────────────────────
-
-type CheckRoutePhase =
-  | { phase: "idle" }
-  | { phase: "loading" }
-  | { phase: "success"; estimates: RouteEstimateLeg[]; stopTitles: Map<string, string> }
-  | { phase: "error"; message: string };
-
-function formatRouteDuration(seconds: number): string {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const rem = minutes % 60;
-  return rem > 0 ? `${hours}h ${rem}m` : `${hours}h`;
-}
-
-function formatRouteDistance(meters: number): string {
-  if (meters < 1000) return `${meters} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function CheckRoutePanel({ items, tripId, dayId }: { items: ItineraryItem[]; tripId: string; dayId: string }) {
-  const [state, setState] = useState<CheckRoutePhase>({ phase: "idle" });
-
-  const routableStops = useMemo(() => getRouteableStopsForEstimate(items), [items]);
-
-  useEffect(() => {
-    setState({ phase: "idle" });
-  }, [items]);
-
-  if (routableStops.length < 2) return null;
-
-  const handleCheckRoute = async () => {
-    setState({ phase: "loading" });
-    try {
-      const response = await callRouteEstimate(tripId, dayId, routableStops);
-      if (response.status === "success" && response.estimates.length > 0) {
-        const stopTitles = new Map(routableStops.map((s) => [s.itemId, s.title]));
-        setState({ phase: "success", estimates: response.estimates, stopTitles });
-      } else {
-        setState({ phase: "error", message: response.message || "Route estimate unavailable." });
-      }
-    } catch {
-      setState({ phase: "error", message: "Route estimate unavailable. Please try again." });
-    }
-  };
-
-  const dismissBtnClass =
-    "flex items-center justify-center min-w-[44px] min-h-[44px] -mr-1 rounded text-ds-folio-ink-mist hover:text-ds-folio-ink transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2";
-
-  if (state.phase === "loading") {
-    return (
-      <div
-        data-testid="check-route-loading"
-        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
-      >
-        <Loader2 className="w-3 h-3 text-ds-folio-ink-mist animate-spin flex-shrink-0" aria-hidden="true" />
-        <span className="text-[10px] text-ds-folio-ink-mist">Estimating route…</span>
-      </div>
-    );
-  }
-
-  if (state.phase === "success") {
-    const sorted = [...state.estimates].sort((a, b) => a.orderIndex - b.orderIndex);
-    return (
-      <div
-        data-testid="check-route-result"
-        className="rounded-lg bg-ds-linen border border-ds-hairline mt-1 overflow-hidden"
-      >
-        <div className="flex items-center justify-between px-2 py-1.5 border-b border-ds-hairline/50">
-          <div className="flex items-center gap-1.5">
-            <Navigation className="w-3 h-3 text-ds-marine-ink flex-shrink-0" aria-hidden="true" />
-            <span className="text-[10px] font-semibold text-ds-folio-ink">Route estimate</span>
-            <span className="text-[10px] text-ds-folio-ink-mist italic">· estimated only</span>
-          </div>
-          <button onClick={() => setState({ phase: "idle" })} aria-label="Clear route estimate" className={dismissBtnClass}>
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-        <div className="px-2 py-1.5 space-y-1">
-          {sorted.map((leg) => {
-            const from = state.stopTitles.get(leg.fromItemId) ?? leg.fromItemId;
-            const to = state.stopTitles.get(leg.toItemId) ?? leg.toItemId;
-            return (
-              <div key={`${leg.fromItemId}-${leg.toItemId}`} className="flex items-baseline gap-1.5 text-[10px]">
-                <span className="text-ds-folio-ink-mist/50 flex-shrink-0" aria-hidden="true">·</span>
-                <span className="text-ds-folio-ink-soft truncate flex-1">{from} → {to}</span>
-                <span className="text-ds-marine-ink font-medium flex-shrink-0">~{formatRouteDuration(leg.durationSeconds)}</span>
-                <span className="text-ds-folio-ink-mist/60 flex-shrink-0">{formatRouteDistance(leg.distanceMeters)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  if (state.phase === "error") {
-    return (
-      <div
-        data-testid="check-route-error"
-        className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
-      >
-        <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
-        <span className="text-[10px] text-ds-folio-ink-mist leading-tight flex-1">{state.message}</span>
-        <button onClick={() => setState({ phase: "idle" })} aria-label="Dismiss" className={dismissBtnClass}>
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-    );
-  }
-
-  // idle
-  return (
-    <div className="flex justify-end mt-1" data-testid="check-route-idle">
-      <button
-        data-testid="check-route-btn"
-        onClick={handleCheckRoute}
-        className="flex items-center gap-1.5 px-2.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[44px]"
-      >
-        <Navigation className="w-3 h-3" aria-hidden="true" />
-        Check route
-      </button>
-    </div>
-  );
-}
-
 // ─── RouteReadinessStatus ─────────────────────────────────────────────────────
 
 function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
@@ -575,6 +469,8 @@ export function ItineraryDayColumn({
   const [applyingTimeline, setApplyingTimeline] = useState(false);
   // Mobile action tray — shows secondary actions (Plan My Day, Suggest Timing) on phones
   const [mobileActionTrayOpen, setMobileActionTrayOpen] = useState(false);
+  // Google Routes legs for inline connectors — empty array means fall back to local haversine hints
+  const [routeLegs, setRouteLegs] = useState<RouteEstimateLeg[]>([]);
 
   useEffect(() => {
     if (!isExpanded) {
@@ -641,6 +537,35 @@ export function ItineraryDayColumn({
     },
     [day.items, showAllItems, itemOverrides, suppressedHotelItemIds]
   );
+
+  // Stable key of routable stop IDs — only re-fetches when the routable pair set changes
+  const routableStops = useMemo(() => getRouteableStopsForEstimate(visibleItems), [visibleItems]);
+  const routableStopsKey = routableStops.map((s) => s.itemId).join(",");
+
+  useEffect(() => {
+    if (routableStops.length < 2) {
+      setRouteLegs([]);
+      return;
+    }
+    let cancelled = false;
+    callRouteEstimate(day.tripId, day.id, routableStops)
+      .then((response) => {
+        if (cancelled) return;
+        if (response.status === "success" && response.estimates.length > 0) {
+          setRouteLegs(response.estimates);
+        } else {
+          setRouteLegs([]);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRouteLegs([]);
+      });
+    return () => { cancelled = true; };
+  // routableStopsKey is a stable string derived from the stops array
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routableStopsKey, day.tripId, day.id]);
+
   const itemIds = visibleItems.map((item: ItineraryItem) => item.id);
   const hiddenItemsCount = Math.max(day.items.length - 1, 0);
   const firstItem = day.items[0];
@@ -934,6 +859,7 @@ export function ItineraryDayColumn({
                 compareSet={compareSet}
                 onUpdateTimeline={handleTimelineUpdated}
                 onSaveHotelDates={onSaveHotelDates}
+                routeLegs={routeLegs}
               />
               {!showAllItems && hasHiddenItems && (
                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-ds-bone" />
@@ -943,7 +869,6 @@ export function ItineraryDayColumn({
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
-          <CheckRoutePanel items={visibleItems} tripId={day.tripId} dayId={day.id} />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (
