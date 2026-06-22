@@ -1,24 +1,24 @@
 /**
- * Route Planning v1 — "Check route" button (PR #514).
+ * Route Planning UX simplification — inline Google Routes connectors (PR #515).
  *
  * Verifies:
  * 1.  callRouteEstimate is exported from api.ts.
- * 2.  callRouteEstimate only POSTs — never GETs; no auto-call on import.
- * 3.  getRouteableStopsForEstimate is exported from travelHints.ts.
- * 4.  getRouteableStopsForEstimate filters to activity/meal only.
- * 5.  getRouteableStopsForEstimate excludes items without coordinates.
- * 6.  getRouteableStopsForEstimate preserves order.
- * 7.  CheckRoutePanel uses data-testid="check-route-btn" for the idle button.
- * 8.  CheckRoutePanel is rendered in the expanded body (ItineraryDayColumn).
- * 9.  No route-estimate call on page load or day switch (no useEffect calling it).
- * 10. No optimize/reorder/map-route/caching behavior introduced.
- * 11. GOOGLE_ROUTES_API_KEY not referenced in frontend source.
- * 12. RouteEstimateResponse, RouteEstimateLeg types exported from types/index.ts.
- * 13. Success display shows "Route estimate" and "estimated only" labels.
- * 14. Error state uses data-testid="check-route-error".
- * 15. Loading state uses data-testid="check-route-loading".
- * 16. Disabled/non-configured backend responses handled via response.message.
- * 17. Existing RouteReadinessStatus tests still pass (regression guard).
+ * 2.  callRouteEstimate only POSTs — never GETs.
+ * 3.  callRouteEstimate targets the route-estimate endpoint.
+ * 4.  getRouteableStopsForEstimate is exported from travelHints.ts.
+ * 5.  getRouteableStopsForEstimate filters to activity/meal only.
+ * 6.  getRouteableStopsForEstimate excludes items without coordinates.
+ * 7.  getRouteableStopsForEstimate preserves order.
+ * 8.  "Check route" button (check-route-btn testid) no longer present.
+ * 9.  CheckRoutePanel component no longer rendered in ItineraryDayColumn.
+ * 10. callRouteEstimate is called inside a useEffect (auto-fetch per day).
+ * 11. callRouteEstimate is NOT called when fewer than 2 routable stops.
+ * 12. Inline connector uses Google Routes leg data when available (drive label).
+ * 13. Google Routes result is labelled "drive", never "walk".
+ * 14. No GOOGLE_ROUTES_API_KEY in frontend source.
+ * 15. No optimize/reorder/map-route behavior introduced.
+ * 16. RouteEstimateResponse, RouteEstimateLeg, RouteableStopPayload types exported.
+ * 17. RouteReadinessStatus still present and intact (regression guard).
  */
 
 import test from "node:test";
@@ -85,6 +85,10 @@ test("callRouteEstimate uses POST method", () => {
   assert.doesNotMatch(fnMatch[0], /method.*"GET"|"GET".*method/, "callRouteEstimate must not GET");
 });
 
+// ---------------------------------------------------------------------------
+// 3. callRouteEstimate targets the route-estimate endpoint
+// ---------------------------------------------------------------------------
+
 test("callRouteEstimate targets the route-estimate endpoint", () => {
   const fnMatch = apiSrc.match(/export async function callRouteEstimate[\s\S]{0,600}/);
   assert.ok(fnMatch);
@@ -92,7 +96,7 @@ test("callRouteEstimate targets the route-estimate endpoint", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. getRouteableStopsForEstimate exported from travelHints.ts
+// 4. getRouteableStopsForEstimate exported from travelHints.ts
 // ---------------------------------------------------------------------------
 
 test("getRouteableStopsForEstimate is exported from travelHints.ts", () => {
@@ -104,7 +108,7 @@ test("getRouteableStopsForEstimate is exported from travelHints.ts", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. getRouteableStopsForEstimate filters to activity/meal
+// 5. getRouteableStopsForEstimate filters to activity/meal
 // ---------------------------------------------------------------------------
 
 test('getRouteableStopsForEstimate filters to "activity" item type', () => {
@@ -127,7 +131,7 @@ test("getRouteableStopsForEstimate does not include flight or hotel", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. getRouteableStopsForEstimate excludes missing-coord items
+// 6. getRouteableStopsForEstimate excludes missing-coord items
 // ---------------------------------------------------------------------------
 
 test("getRouteableStopsForEstimate uses hasRouteableCoordinates to gate stops", () => {
@@ -141,7 +145,7 @@ test("getRouteableStopsForEstimate uses hasRouteableCoordinates to gate stops", 
 });
 
 // ---------------------------------------------------------------------------
-// 6. getRouteableStopsForEstimate preserves order (no sort)
+// 7. getRouteableStopsForEstimate preserves order (no sort)
 // ---------------------------------------------------------------------------
 
 test("getRouteableStopsForEstimate does not sort or reorder stops", () => {
@@ -151,77 +155,156 @@ test("getRouteableStopsForEstimate does not sort or reorder stops", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. CheckRoutePanel idle button testid
+// 8. "Check route" button no longer present
 // ---------------------------------------------------------------------------
 
-test('CheckRoutePanel uses data-testid="check-route-btn" for the idle button', () => {
-  assert.match(
+test('"check-route-btn" testid no longer present in ItineraryDayColumn', () => {
+  assert.doesNotMatch(
     dayColumnSrc,
     /data-testid="check-route-btn"/,
-    'CheckRoutePanel must have data-testid="check-route-btn"',
+    '"check-route-btn" testid must be removed — separate Check route button is gone',
+  );
+});
+
+test('"check-route-idle" testid no longer present in ItineraryDayColumn', () => {
+  assert.doesNotMatch(
+    dayColumnSrc,
+    /data-testid="check-route-idle"/,
+    '"check-route-idle" testid must be removed',
   );
 });
 
 // ---------------------------------------------------------------------------
-// 8. CheckRoutePanel rendered in ItineraryDayColumn expanded body
+// 9. CheckRoutePanel no longer rendered
 // ---------------------------------------------------------------------------
 
-test("CheckRoutePanel is rendered in ItineraryDayColumn JSX", () => {
-  assert.match(
+test("CheckRoutePanel component no longer defined in ItineraryDayColumn", () => {
+  assert.doesNotMatch(
+    dayColumnSrc,
+    /function CheckRoutePanel/,
+    "CheckRoutePanel component must be removed",
+  );
+});
+
+test("CheckRoutePanel no longer used in ItineraryDayColumn JSX", () => {
+  assert.doesNotMatch(
     dayColumnSrc,
     /<CheckRoutePanel\b/,
-    "CheckRoutePanel must be used in ItineraryDayColumn",
+    "CheckRoutePanel must not be rendered",
   );
 });
 
-test("CheckRoutePanel receives tripId and dayId props", () => {
-  const usage = dayColumnSrc.match(/<CheckRoutePanel[\s\S]{0,200}/);
-  assert.ok(usage, "CheckRoutePanel usage must be present");
-  assert.match(usage[0], /tripId/, "CheckRoutePanel must receive tripId");
-  assert.match(usage[0], /dayId/, "CheckRoutePanel must receive dayId");
-});
-
 // ---------------------------------------------------------------------------
-// 9. No automatic route-estimate call on load or day switch
+// 10. callRouteEstimate is called inside a useEffect (auto-fetch)
 // ---------------------------------------------------------------------------
 
-test("callRouteEstimate is not called inside any useEffect in ItineraryDayColumn", () => {
-  // Extract the inner callback body of each useEffect block (content between => { and }) up to 200 chars)
-  // to avoid greedy matching spilling into adjacent handler code.
-  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([^}]{0,200})\}/g)]
+test("callRouteEstimate is called inside a useEffect in ItineraryDayColumn", () => {
+  // Find useEffect blocks and check that at least one calls callRouteEstimate
+  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,800}?)\}\s*,/g)]
     .map((m) => m[1] ?? "");
-  // There must be at least one useEffect (the state-reset one)
   assert.ok(useEffectBodies.length > 0, "at least one useEffect must exist");
-  for (const body of useEffectBodies) {
-    assert.doesNotMatch(
-      body,
-      /callRouteEstimate/,
-      "callRouteEstimate must not be called inside a useEffect callback body (no auto-trigger)",
-    );
-  }
-});
-
-test("callRouteEstimate is not called at module level or on render in ItineraryDayColumn", () => {
-  // The only callRouteEstimate call should be inside the handleCheckRoute async function
-  const allCalls = [...dayColumnSrc.matchAll(/callRouteEstimate/g)];
-  // Should appear: 1 import + 1 call inside handler = 2 occurrences
-  assert.ok(allCalls.length >= 1, "callRouteEstimate must appear at least once (import or call)");
-  // The call site must be inside an async arrow or function (not top-level JSX or useEffect)
-  const handlerMatch = dayColumnSrc.match(/handleCheckRoute[\s\S]{0,400}callRouteEstimate/);
-  assert.ok(handlerMatch, "callRouteEstimate must be inside handleCheckRoute handler");
+  const hasRouteEstimateCall = useEffectBodies.some((body) =>
+    /callRouteEstimate/.test(body)
+  );
+  assert.ok(hasRouteEstimateCall, "callRouteEstimate must be called inside a useEffect for auto-fetch");
 });
 
 // ---------------------------------------------------------------------------
-// 10. No optimize/reorder/map-route/caching behavior
+// 11. callRouteEstimate NOT called when fewer than 2 routable stops
 // ---------------------------------------------------------------------------
 
-test("CheckRoutePanel does not reference route optimization or reordering", () => {
-  const panelMatch = dayColumnSrc.match(/function CheckRoutePanel[\s\S]{0,3000}/);
-  assert.ok(panelMatch, "CheckRoutePanel must exist");
+test("route-estimate effect guards on routableStops.length < 2", () => {
+  // The useEffect body that contains callRouteEstimate must also guard on length < 2
+  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,800}?)\}\s*,/g)]
+    .map((m) => m[1] ?? "");
+  const routeEffect = useEffectBodies.find((body) => /callRouteEstimate/.test(body));
+  assert.ok(routeEffect, "must find useEffect containing callRouteEstimate");
+  assert.match(
+    routeEffect,
+    /routableStops\.length\s*<\s*2/,
+    "useEffect must guard on routableStops.length < 2 before calling callRouteEstimate",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 12. Inline connector uses Google Routes leg data
+// ---------------------------------------------------------------------------
+
+test("renderItemsWithConnectors accepts routeLegs parameter", () => {
+  const fnMatch = dayColumnSrc.match(/function renderItemsWithConnectors[\s\S]{0,800}/);
+  assert.ok(fnMatch, "renderItemsWithConnectors must exist");
+  assert.match(
+    fnMatch[0],
+    /routeLegs/,
+    "renderItemsWithConnectors must accept routeLegs parameter",
+  );
+});
+
+test("inline connector uses fromItemId / toItemId to match Google leg", () => {
+  const fnMatch = dayColumnSrc.match(/function renderItemsWithConnectors[\s\S]{0,4000}/);
+  assert.ok(fnMatch, "renderItemsWithConnectors must exist");
+  assert.match(
+    fnMatch[0],
+    /fromItemId|toItemId/,
+    "connector must match Google leg by fromItemId/toItemId",
+  );
+});
+
+test("inline connector renders drive label from Google Routes leg", () => {
+  const fnMatch = dayColumnSrc.match(/function renderItemsWithConnectors[\s\S]{0,4000}/);
+  assert.ok(fnMatch);
+  // When a Google leg is used, it should show "min drive"
+  assert.match(
+    fnMatch[0],
+    /min drive/,
+    'Google Routes connector must label timing as "min drive"',
+  );
+});
+
+test('inline connector uses data-testid="route-connector-google" for Google leg', () => {
+  assert.match(
+    dayColumnSrc,
+    /data-testid="route-connector-google"/,
+    'Google Routes connector must use data-testid="route-connector-google"',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 13. Google Routes result is labelled "drive", not "walk"
+// ---------------------------------------------------------------------------
+
+test("Google Routes connector does not produce a walk label", () => {
+  // Find the block that renders the Google leg connector
+  const googleLegBlock = dayColumnSrc.match(/googleLeg[\s\S]{0,500}min drive/);
+  assert.ok(googleLegBlock, "must find Google leg connector block");
   assert.doesNotMatch(
-    panelMatch[0],
+    googleLegBlock[0],
+    /min walk/,
+    "Google Routes adapter is DRIVE — connector must never say 'min walk'",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 14. GOOGLE_ROUTES_API_KEY not in frontend source
+// ---------------------------------------------------------------------------
+
+test("GOOGLE_ROUTES_API_KEY is not referenced anywhere in frontend source", () => {
+  assert.doesNotMatch(
+    allFrontendSrc,
+    /GOOGLE_ROUTES_API_KEY/,
+    "GOOGLE_ROUTES_API_KEY must never appear in frontend source",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 15. No optimize/reorder/map-route behavior
+// ---------------------------------------------------------------------------
+
+test("ItineraryDayColumn does not reference route optimization or reordering", () => {
+  assert.doesNotMatch(
+    dayColumnSrc,
     /OptimizeDay|Optimize Day|optimizeRoute|reorder|routeMatrix|DirectionsAPI|DistanceMatrix/i,
-    "CheckRoutePanel must not introduce optimize/reorder/matrix behavior",
+    "must not introduce optimize/reorder/matrix behavior",
   );
 });
 
@@ -236,19 +319,7 @@ test("api.ts callRouteEstimate does not reference optimize or matrix endpoints",
 });
 
 // ---------------------------------------------------------------------------
-// 11. GOOGLE_ROUTES_API_KEY not in frontend source
-// ---------------------------------------------------------------------------
-
-test("GOOGLE_ROUTES_API_KEY is not referenced anywhere in frontend source", () => {
-  assert.doesNotMatch(
-    allFrontendSrc,
-    /GOOGLE_ROUTES_API_KEY/,
-    "GOOGLE_ROUTES_API_KEY must never appear in frontend source",
-  );
-});
-
-// ---------------------------------------------------------------------------
-// 12. Route estimate types exported from types/index.ts
+// 16. Route estimate types exported from types/index.ts
 // ---------------------------------------------------------------------------
 
 test("RouteEstimateResponse is exported from types/index.ts", () => {
@@ -276,75 +347,7 @@ test("RouteableStopPayload is exported from types/index.ts", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 13. Success display copy
-// ---------------------------------------------------------------------------
-
-test('CheckRoutePanel success display includes "Route estimate" label', () => {
-  assert.match(
-    dayColumnSrc,
-    /Route estimate/,
-    'success panel must say "Route estimate"',
-  );
-});
-
-test('CheckRoutePanel success display includes "estimated" qualifier', () => {
-  assert.match(
-    dayColumnSrc,
-    /estimated only|estimated\b/i,
-    'success panel must label results as estimated',
-  );
-});
-
-// ---------------------------------------------------------------------------
-// 14. Error state testid
-// ---------------------------------------------------------------------------
-
-test('CheckRoutePanel uses data-testid="check-route-error" for error state', () => {
-  assert.match(
-    dayColumnSrc,
-    /data-testid="check-route-error"/,
-    'error state must use data-testid="check-route-error"',
-  );
-});
-
-// ---------------------------------------------------------------------------
-// 15. Loading state testid
-// ---------------------------------------------------------------------------
-
-test('CheckRoutePanel uses data-testid="check-route-loading" for loading state', () => {
-  assert.match(
-    dayColumnSrc,
-    /data-testid="check-route-loading"/,
-    'loading state must use data-testid="check-route-loading"',
-  );
-});
-
-// ---------------------------------------------------------------------------
-// 16. Backend non-success statuses use response.message (safe copy)
-// ---------------------------------------------------------------------------
-
-test("CheckRoutePanel uses response.message for non-success backend status", () => {
-  const panelMatch = dayColumnSrc.match(/function CheckRoutePanel[\s\S]{0,3000}/);
-  assert.ok(panelMatch);
-  assert.match(
-    panelMatch[0],
-    /response\.message/,
-    "non-success statuses must surface response.message (safe copy from backend)",
-  );
-});
-
-test("CheckRoutePanel does not expose provider internals in error copy", () => {
-  const panelMatch = dayColumnSrc.match(/function CheckRoutePanel[\s\S]{0,3000}/);
-  assert.ok(panelMatch);
-  assert.doesNotMatch(
-    panelMatch[0],
-    /GOOGLE_ROUTES|google_routes_adapter|provider_error|not_configured/,
-    "CheckRoutePanel must not expose internal status codes or provider names in UI copy",
-  );
-});
-
-// ---------------------------------------------------------------------------
-// 17. Regression guard — RouteReadinessStatus still present and intact
+// 17. RouteReadinessStatus still present and intact (regression guard)
 // ---------------------------------------------------------------------------
 
 test("RouteReadinessStatus still defined in ItineraryDayColumn (regression guard)", () => {
@@ -371,13 +374,8 @@ test("computeRouteReadiness still imported in ItineraryDayColumn (regression gua
   );
 });
 
-test("CheckRoutePanel is rendered after RouteReadinessStatus (correct placement)", () => {
-  const readinessPos = dayColumnSrc.indexOf("<RouteReadinessStatus");
-  const checkRoutePos = dayColumnSrc.indexOf("<CheckRoutePanel");
-  assert.ok(readinessPos !== -1, "RouteReadinessStatus must be present");
-  assert.ok(checkRoutePos !== -1, "CheckRoutePanel must be present");
-  assert.ok(
-    checkRoutePos > readinessPos,
-    "CheckRoutePanel must appear after RouteReadinessStatus in JSX",
-  );
+test("routeLegs state is passed to TimelineSections (regression guard)", () => {
+  const usage = dayColumnSrc.match(/<TimelineSections[\s\S]{0,600}/);
+  assert.ok(usage, "TimelineSections usage must be present");
+  assert.match(usage[0], /routeLegs/, "TimelineSections must receive routeLegs prop");
 });

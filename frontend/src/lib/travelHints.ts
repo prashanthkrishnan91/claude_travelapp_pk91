@@ -112,8 +112,8 @@ interface RoutableItem {
 
 /**
  * Returns activity/meal stops that have canonical coordinates, in the order
- * they appear in the day. Used only to build the route-estimate request payload
- * on an explicit "Check route" button click — never called on load or day change.
+ * they appear in the day. Used to build the route-estimate request payload for
+ * inline connector timings — called when the routable stop set changes.
  */
 export function getRouteableStopsForEstimate(items: RoutableItem[]): RouteableStopPayload[] {
   return items
