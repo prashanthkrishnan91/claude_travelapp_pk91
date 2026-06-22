@@ -1,6 +1,16 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-21 (Plan My Day coordinate audit + expanded test coverage, branch claude/plan-my-day-coordinates-pv5n48)
+Last updated: 2026-06-22 (Plan My Day coordinate runtime validation — PASS; no bug found)
+
+### Plan My Day Coordinate Validation — PASS (2026-06-22, post PR #516)
+
+Runtime/DB validation of the Plan My Day add path confirmed: items added via
+Plan My Day ("Miami Walk of Fame", "Pérez Art Museum Miami", added 2026-06-01)
+persist real `lat`/`lng` in `details` (e.g. `lat: 25.7859, lng: -80.1862`).
+`readCanonicalLat`/`readCanonicalLng`/`hasRouteableCoordinates` all return correctly.
+Day `0a59e074` has 5 routable activity stops → `CheckRoutePanel` renders.
+22/22 frontend tests pass; 5/5 backend model assertions pass. No bug found.
+Route Planning v1 remains inert (no env flags set).
 
 ### Route Planning v1 PR 4 — Journey Desk "Check route" button (current, PR #514)
 
