@@ -21,6 +21,23 @@ Follow-up needed:
 
 ---
 
+### 2026-06-22 — PR #517: docs-only PR body missing required template sections; AI PR Readiness Check failed
+
+Repo: claude_travelapp_pk91
+Area: PR workflow / PR template discipline
+Severity: Level 1 (CI failed; PR merged by owner despite failure; no production impact)
+Miss: Opened a docs-only validation PR (#517) without including required PR template sections: `## Severity`, `## Validation`, `SQL / env / providers / UI`, `AI usage note`, `AI PR readiness`. The readiness check enforces these unconditionally — even for validation/docs-only PRs.
+Impact: AI PR Readiness Check failed; owner merged anyway; one CI failure on record.
+What caught it: `ai_pr_readiness_check.py` CI step.
+Root cause: Assumed docs-only PRs were exempt from the full template. The check does not have a docs-only bypass.
+What should catch it next time: Before calling `mcp__github__create_pull_request`, always include all required template anchors from `.github/pull_request_template.md` — even for docs/validation/audit PRs. The check is unconditional.
+One-off or repeated: One-off (first docs-only PR opened via agent).
+Promotion target: MISS_LEDGER only (one occurrence).
+Action taken: PR merged by owner; no retro PR needed.
+Follow-up needed: None.
+
+---
+
 ### 2026-05-26 — PR #488: Next.js ESLint prefer-const / no-unused-vars caught only by Vercel, not local tsc
 
 Repo: claude_travelapp_pk91
