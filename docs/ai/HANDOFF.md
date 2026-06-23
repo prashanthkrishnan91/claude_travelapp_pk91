@@ -1,30 +1,33 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-22 (Plan My Day coordinate runtime validation — PASS; no bug found)
+Last updated: 2026-06-23 (Route Planning UX simplification — PR #519 merged)
 
-### Plan My Day Coordinate Validation — PASS (2026-06-22, post PR #516)
+### Route Planning UX simplification — inline Google Routes connectors (merged PR #519)
 
-Runtime/DB validation of the Plan My Day add path confirmed: items added via
-Plan My Day ("Miami Walk of Fame", "Pérez Art Museum Miami", added 2026-06-01)
-persist real `lat`/`lng` in `details` (e.g. `lat: 25.7859, lng: -80.1862`).
-`readCanonicalLat`/`readCanonicalLng`/`hasRouteableCoordinates` all return correctly.
-Day `0a59e074` has 5 routable activity stops → `CheckRoutePanel` renders.
-22/22 frontend tests pass; 5/5 backend model assertions pass. No bug found.
-Route Planning v1 remains inert (no env flags set).
+`CheckRoutePanel` (the "Check route" idle button + bottom "Route estimate" panel)
+fully removed from `ItineraryDayColumn.tsx`. The between-card inline connector is
+now the **only** route/travel UI.
 
-### Route Planning v1 PR 4 — Journey Desk "Check route" button (current, PR #514)
+**Auto-fetch per day:** a `useEffect` in `ItineraryDayColumn` calls
+`callRouteEstimate` automatically when the routable stop set changes (≥2
+activity/meal stops with canonical coordinates). Dependency key:
+`routableStopsKey = stops.map(s => \`${s.itemId}:${s.lat},${s.lng}\`).join("|")`
+— encodes stop IDs and coordinates so the effect re-fires when locations change
+but stays stable on open/close menu, expand/collapse, select/compare, scroll.
+`cancelled` flag prevents stale-fetch leaks on fast day switching.
 
-Read-only "Check route" button in Journey Desk expanded day view. Calls
-`POST /itinerary/{trip_id}/days/{day_id}/route-estimate` **only on explicit
-button click** — no auto-calls on load, day switch, or item selection.
+**Connector label:** when Google Routes returns a success leg, the connector
+renders `~N min drive · X.X km` with a Car icon (`data-testid="route-connector-google"`).
+Google Routes adapter is `TRAFFIC_UNAWARE + DRIVE` — always "drive", never "walk".
+Fallback (disabled / not_configured / provider_error / <2 stops) renders the
+existing haversine `computeAdjacentHints` connector unchanged.
 
-Button visible when ≥2 activity/meal stops with canonical coordinates exist.
-Flights, hotels, notes excluded. Shows estimated per-leg durations/distances
-(labeled "estimated only"). 4 UI states: idle, loading, success, error.
-`GOOGLE_ROUTES_API_KEY` not referenced in frontend. Production inert by default.
+**No backend change.** `callRouteEstimate` and the FastAPI route-estimate endpoint
+untouched. `GOOGLE_ROUTES_API_KEY` remains server-side only. No optimization,
+reordering, geocoding, route maps, or persistent caching.
 
-New: `getRouteableStopsForEstimate()` in `travelHints.ts`; `callRouteEstimate()` in
-`api.ts`; `CheckRoutePanel` in `ItineraryDayColumn.tsx`; 30 tests all pass.
+Tests: `route-estimate-check-route.test.mjs` 30/30; `route-readiness-status.test.mjs` 26/26 (56 total).
+`RouteReadinessStatus` component still present and intact.
 
 ### Route Planning v1 PR 3 — live Google Routes ComputeRoutes adapter (PR #513)
 

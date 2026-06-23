@@ -50,6 +50,7 @@ function buildSavePayload(ctx: ExploreResultContext): SavedItemCreate {
     destination: ctx.destination,
     ...( payload["rating"] !== undefined && { rating: payload["rating"] }),
     ...( payload["cuisine"] !== undefined && { cuisine: payload["cuisine"] }),
+    ...( payload["category"] !== undefined && { category: payload["category"] }),
     ...( payload["priceLevel"] !== undefined && { priceLevel: payload["priceLevel"] }),
     ...( payload["address"] !== undefined && { address: payload["address"] }),
     ...( payload["tags"] !== undefined && { tags: payload["tags"] }),
