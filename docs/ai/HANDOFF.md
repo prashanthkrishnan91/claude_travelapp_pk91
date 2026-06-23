@@ -1,6 +1,16 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-23 (Route Planning UX simplification — PR #519 merged)
+Last updated: 2026-06-23 (Saved Items metadata parity — PR #521 merged)
+
+### Saved Items → itinerary path metadata parity (merged PR #521)
+
+Two metadata fields were silently dropped when a place saved via Concierge or Explore was converted to an itinerary item via the Saved Items path, found during a household workflow smoke test.
+
+**Bug 1 — lat/lng not captured from Concierge saves:** `ConciergePage.handleSaveCard()` read six fields from `googleVerification` but not `gv.lat`/`gv.lng`, which are populated by the backend `GoogleVerification` model. Items saved from Concierge then added to a trip had no coordinates, so `extractItineraryCoordinates(snap)` returned null and route connectors showed a warning icon. Fix: extract finite `gv.lat`/`gv.lng` and spread into `displaySnapshot`.
+
+**Bug 2 — category dropped for all Saved Items → Trip conversions:** `addSavedItemToTrip()` never read `snap["category"]`, so `details.category` was always absent. The itinerary card renders `d.category` (`ItineraryItemCard.tsx:681`) for activity items. `addAttractionToDay()` correctly writes category (line 1556); the Saved Items path did not. Explore's `buildSavePayload()` also omitted category from `displaySnapshot`. Fix: add category to Explore's `displaySnapshot`; extract `snap["category"] → details.category` in `addSavedItemToTrip()`.
+
+3 files, 6 lines total. No schema changes, no new providers. Existing saved items unaffected. All other household workflow smoke test steps: PASS.
 
 ### Route Planning UX simplification — inline Google Routes connectors (merged PR #519)
 
