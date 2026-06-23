@@ -2765,6 +2765,8 @@ export async function addSavedItemToTrip(
     details.provider_place_id = resolvedProviderPlaceId;
   }
 
+  if (typeof snap["category"] === "string" && snap["category"]) details.category = snap["category"];
+
   if (item.vertical === "restaurant") {
     if (typeof snap["cuisine"] === "string" && snap["cuisine"]) details.cuisine = snap["cuisine"];
     if (typeof snap["priceLevel"] === "number") details.priceLevel = snap["priceLevel"];
