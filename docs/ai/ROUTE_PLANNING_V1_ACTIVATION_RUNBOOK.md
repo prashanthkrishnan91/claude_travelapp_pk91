@@ -1,8 +1,12 @@
 # Route Planning v1 — Activation Runbook
 
 **Status:** Feature complete, production-inert. Requires explicit opt-in to activate.  
-**Last validated:** 2026-06-18 (post PR #514 merge)  
+**Last validated:** 2026-06-23 (post PR #519 merge — inline auto-fetch UX)  
 **Governed by:** `docs/ai/ROUTE_PLANNING_V1_CONTRACT.md` (PR #509 ADR)
+
+> **PR #519 UX change:** The separate "Check route" button and `CheckRoutePanel` were removed. Route
+> estimates now auto-fetch inline when a day with ≥2 routable stops is expanded. The connector
+> between itinerary cards shows `~N min drive · X.X km` directly. Steps below reflect this.
 
 > ⚠️ **Do not activate in production without a controlled rollout decision. This runbook describes the procedure for a deliberate, manual activation in a non-production or controlled preview environment only.**
 
@@ -44,7 +48,14 @@ Run all of the following before enabling in any environment:
    ```
    Note: `route-readiness-status.test.mjs` is also covered by `npm test`. `route-estimate-check-route.test.mjs` must be run directly via `node --test` as it is not included in the main `npm test` script.
 
-6. **Confirm no automatic calls.** The `callRouteEstimate` function in `frontend/src/lib/api.ts` must be invoked only from the `onClick` handler of the "Check route" button. Verify no `useEffect` calls it (the only `useEffect` in `CheckRoutePanel` resets state to `"idle"` — it does not call the API).
+6. **Confirm call discipline (auto-fetch, not looping).** After PR #519, `callRouteEstimate` is invoked
+   from a `useEffect` in `ItineraryDayColumn` keyed on `routableStopsKey` (a stable string encoding
+   stop IDs + coordinates). Verify:
+   - The effect fires at most once per stable `routableStopsKey` value.
+   - No loop: `routeLegs` state (set by the effect) is not in the dependency array.
+   - A cancelled-flag cleanup (`cancelled = true`) prevents stale state on unmount.
+   - The guard `routableStops.length < 2` prevents calls with insufficient stops.
+   - Opening menus, compare/select actions, and expand/collapse (unless routable stop set changes) do **not** fire another call.
 
 7. **Confirm Google Routes API key has appropriate quota limits set** in the Google Cloud Console before use (see Cost Guardrails below).
 
@@ -90,11 +101,14 @@ Send 11 stops → HTTP 422 (`>10 stops`).
 ### Step 5 — UI smoke test in Journey Desk
 
 1. Open a day with ≥2 activity/meal stops that have canonical coordinates (lat/lng from Google Places).
-2. Confirm the "Check route" button is visible.
-3. Click "Check route" — confirm loading spinner, then estimated leg durations appear.
-4. Confirm estimates are labeled as "estimated only" (not guaranteed times).
-5. Confirm the stop order in the results matches the original manual order exactly.
-6. Confirm no automatic call fires when switching days or changing items.
+2. Confirm there is **no** "Check route" button and **no** bottom route-estimate panel (both removed in PR #519).
+3. Confirm the inline connector between itinerary cards shows `~N min drive · X.X km` automatically
+   (no click required) with `data-testid="route-connector-google"`.
+4. Confirm the connector never says "walk" — adapter uses DRIVE + TRAFFIC_UNAWARE.
+5. Confirm the stop order in the connectors matches the original manual item order exactly.
+6. Confirm opening/closing item menus, compare, or select actions do **not** fire an additional
+   route-estimate network call (visible in browser devtools).
+7. Switching to another routable day may fire one call for that day's stop set.
 
 ### Step 6 — Verify `provider_error` path
 
@@ -110,10 +124,10 @@ UI should show the error message without crashing.
 
 | State | Condition | `status` | `estimates` | UI shown |
 |---|---|---|---|---|
-| Disabled | `ROUTE_ESTIMATE_V1_ENABLED` = false | `disabled` | `[]` | _(button visible but shows error message)_ |
-| Not configured | Flag true, key missing | `not_configured` | `[]` | Error message from `response.message` |
-| Auth failure | Trip/day not owned | HTTP 404 | — | Generic error catch |
-| Too few stops | `<2` valid stops | HTTP 422 | — | Button not rendered (`routableStops.length < 2`) |
+| Disabled | `ROUTE_ESTIMATE_V1_ENABLED` = false | `disabled` | `[]` | Connector falls back to local haversine hint; no error shown |
+| Not configured | Flag true, key missing | `not_configured` | `[]` | Connector falls back to local haversine hint; no error shown |
+| Auth failure | Trip/day not owned | HTTP 404 | — | Generic catch; connector shows local hint |
+| Too few stops | `<2` valid stops | HTTP 422 | — | Effect exits early (`routableStops.length < 2`); no call made |
 | Too many stops | `>10` valid stops | HTTP 422 | — | Generic error catch |
 | Provider error | Google API error/timeout | `provider_error` | `[]` | Error message from `response.message` |
 | Success | All gates pass | `success` | populated | Per-leg durations and distances |
@@ -122,7 +136,7 @@ UI should show the error message without crashing.
 
 ## Cost Guardrails
 
-- **One ComputeRoutes call per manual button click.** No background calls, no cron jobs, no automatic re-estimation on item change.
+- **At most one ComputeRoutes call per stable routable stop set.** Auto-fetches inline when a day with ≥2 routable stops is expanded; re-fetches only if the stop IDs or coordinates change. No polling, no cron jobs.
 - **Hard cap of 10 stops per call.** Enforced at both service layer (HTTP 422) and adapter boundary.
 - **Tight field mask:** Only `routes.legs.duration,routes.legs.distanceMeters` — no polylines, no header-level totals, no alternatives.
 - **No matrix calls, no traffic-aware routing, no route optimization** — these are v1 hard exclusions.
@@ -137,18 +151,18 @@ If issues are found after activation:
 
 1. **Immediate:** Set `ROUTE_ESTIMATE_V1_ENABLED=false` (or remove the env var). The endpoint immediately returns `status: "disabled"` with no provider calls. No deploy required if the env var change propagates to the runtime.
 2. **Key rotation:** If the API key is suspected compromised, rotate it in Google Cloud Console first, then update `GOOGLE_ROUTES_API_KEY` in the environment. Old key becomes invalid immediately.
-3. **Full revert:** If the feature itself is problematic, the `CheckRoutePanel` component is isolated in `ItineraryDayColumn.tsx`. Removing it from the render tree does not affect other Journey Desk functionality.
+3. **Full revert:** If the feature itself is problematic, setting the flag to `false` is sufficient — the `useEffect` catches the `disabled` status and falls back to local hints without any user-visible error. No deploy required if the env var change propagates.
 4. **No database changes needed.** Route estimates are ephemeral — not persisted. Rollback has no data migration implications.
 
 ---
 
 ## What This Feature Does (v1 Scope)
 
-- Manual "Check route" button in Journey Desk expanded day view
+- Inline auto-fetch route connector between itinerary cards in Journey Desk (PR #519; no button click required)
 - Estimates per-leg drive duration and distance for the current manual stop order
-- Activity and meal stops with canonical coordinates only
-- Single ComputeRoutes call to Google Routes API per click
-- Results labeled as estimated, not guaranteed
+- Activity and meal stops with canonical coordinates only; ≥2 stops required, ≤10 enforced
+- At most one ComputeRoutes call per stable routable stop set (keyed on stop IDs + coordinates)
+- Shows `~N min drive · X.X km` directly in the connector; falls back to local haversine hints on provider error
 
 ## What This Feature Does NOT Do (Out of Scope for v1)
 
@@ -177,14 +191,14 @@ If issues are found after activation:
 | `backend/app/models/route_estimate.py` | Pydantic request/response models |
 | `frontend/src/lib/api.ts` | `callRouteEstimate()` — POST only, no auto-calls |
 | `frontend/src/lib/travelHints.ts` | `getRouteableStopsForEstimate()` — order-preserving filter |
-| `frontend/src/components/trips/ItineraryDayColumn.tsx` | `CheckRoutePanel` component — button-triggered only |
+| `frontend/src/components/trips/ItineraryDayColumn.tsx` | Auto-fetch `useEffect` + inline `route-connector-google` connector (PR #519 removed `CheckRoutePanel`) |
 | `docs/ai/ROUTE_PLANNING_V1_CONTRACT.md` | Governing ADR |
 
 ---
 
 ## Key Safety Invariants (Do Not Break)
 
-1. `callRouteEstimate` is called only from `onClick` — never from `useEffect` or page lifecycle.
+1. `callRouteEstimate` is called only from the `useEffect` keyed on `routableStopsKey` — at most once per stable stop set. It must not be called from any other `onClick` or lifecycle hook.
 2. Coordinates are sent to Google only after trip AND day ownership are verified.
 3. `GOOGLE_ROUTES_API_KEY` is never referenced in frontend source (only in tests verifying its absence).
 4. Stop order is never changed — `stop_order_preserved: true` in every response.
