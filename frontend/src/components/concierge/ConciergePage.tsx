@@ -566,6 +566,8 @@ export function ConciergePage() {
       const cuisine = (p.cuisine ?? disp?.cuisine) as string | undefined;
       const priceLevel = (p.priceLevel ?? p.price_level ?? disp?.priceLevel ?? disp?.price_level) as string | undefined;
       const tags = (p.tags ?? disp?.tags) as string[] | undefined;
+      const lat = typeof gv?.lat === "number" && Number.isFinite(gv.lat) ? gv.lat as number : undefined;
+      const lng = typeof gv?.lng === "number" && Number.isFinite(gv.lng) ? gv.lng as number : undefined;
 
       await saveItem({
         vertical,
@@ -582,6 +584,7 @@ export function ConciergePage() {
           address,
           googleMapsUri,
           tags,
+          ...(lat !== undefined && lng !== undefined && { lat, lng }),
         },
         searchContext: { destination, query: lastQuery ?? "" },
         provenance: { source: "outside_concierge" },
