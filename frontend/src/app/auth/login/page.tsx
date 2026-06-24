@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+    <div className="atelier-backdrop-host relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
       {/* Atmospheric Background System v1 — cinematic auth-hero backdrop.
           Registry-driven (lib/atmosphere/backgrounds.ts); placeholder gradient
           until a curated /atmosphere/auth-hero.jpg is supplied. */}

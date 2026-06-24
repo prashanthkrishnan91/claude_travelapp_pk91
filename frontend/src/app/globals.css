@@ -1135,14 +1135,33 @@
   .atelier-backdrop--fixed {
     position: fixed;
     inset: 0;
-    z-index: -1;         /* below all in-flow content, above the page canvas */
+    /* z-index 0 (NOT negative): the backdrop is the lowest layer of an explicit
+       local stacking context owned by its host, so it can never paint behind the
+       document/body canvas. Hosts lift their chrome/content above it with a
+       positive z-index (see the app-shell + auth rules below). */
+    z-index: 0;
   }
-  /* When a backdrop is mounted on the app shell, drop the opaque paper base so
-     the registry-driven backdrop bed becomes the visible canvas. Non-backdrop
-     routes keep the enriched warm wash on .atelier-atmosphere-root above. */
+  /* App-shell host: establish an explicit local stacking context, drop the
+     opaque paper base so the registry backdrop bed is the visible canvas, and
+     lift sidebar / floating nav / main content above the backdrop. No negative
+     z-index anywhere. Non-backdrop routes keep the enriched warm wash above. */
   .atelier-atmosphere-root[data-atelier-backdrop="true"] {
     background-color: transparent;
     background-image: none;
+    isolation: isolate;
+  }
+  /* Sidebar + main content lifted above the backdrop. The floating
+     .atelier-nav-artifact-root is already fixed at z-index:50 (inside this
+     isolated context, so above the backdrop) and is intentionally not touched. */
+  .atelier-atmosphere-root[data-atelier-backdrop="true"] > .folio-sidebar,
+  .atelier-atmosphere-root[data-atelier-backdrop="true"] > main {
+    position: relative;
+    z-index: 10;
+  }
+  /* Auth host: the login/signup wrapper carries .atelier-backdrop-host to make
+     its stacking context explicit; its form column already sits at z-10. */
+  .atelier-backdrop-host {
+    isolation: isolate;
   }
   .atelier-backdrop--absolute {
     position: absolute;
@@ -9421,13 +9440,12 @@
   /* Calm Brief — warm paper panel under the cover. Answers, in one glance:
      where · what is fixed · what still needs choosing. */
   .journey-desk-brief {
-    /* Atmospheric Background System v1 — brief-texture wash. The lightest
-       atmosphere in the system: a faint warm-gold breath at the top over warm
-       paper. Read-only itinerary, so legibility wins over mood. */
-    background-color: var(--ds-warm-paper);
-    background-image:
-      radial-gradient(120% 60% at 50% -8%, rgba(197, 148, 77, 0.06) 0%, transparent 58%),
-      linear-gradient(180deg, rgba(250, 247, 240, 0) 0%, rgba(245, 239, 228, 0.5) 100%);
+    /* Atmospheric Background System v1 — the brief-texture wash is rendered by
+       the shared <AtelierBackdrop role="brief-texture" mode="absolute"> inside
+       this card (centrally registered, not a one-off gradient here). This rule
+       owns only structural chrome; the card stays transparent so the backdrop
+       bed shows through and rounds with the border-radius (inherited). */
+    background-color: transparent;
     border: 1px solid var(--ds-hairline);
     border-radius: 14px;
     box-shadow: var(--ds-paper-elevation-1);

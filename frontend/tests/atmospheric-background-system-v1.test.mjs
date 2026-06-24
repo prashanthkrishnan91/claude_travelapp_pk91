@@ -102,9 +102,27 @@ describe("Atmospheric Background System v1 — shared component", () => {
     assert.ok(globalsCss.includes(".atelier-backdrop"));
     assert.ok(globalsCss.includes("pointer-events: none"));
     assert.ok(globalsCss.includes(".atelier-backdrop--fixed"));
-    // fixed layer sits behind content, not in flow
+    // fixed layer is positioned (out of flow), so it cannot shift layout
     const block = globalsCss.slice(globalsCss.indexOf(".atelier-backdrop--fixed"));
-    assert.ok(block.slice(0, 160).includes("position: fixed"));
+    assert.ok(block.slice(0, 220).includes("position: fixed"));
+  });
+
+  it("11b. fixed backdrop uses an explicit safe stacking model, NOT negative z-index", () => {
+    const fixedStart = globalsCss.indexOf(".atelier-backdrop--fixed");
+    const block = globalsCss.slice(fixedStart, globalsCss.indexOf("}", fixedStart));
+    // must not paint behind the document/body canvas via z-index:-1
+    assert.ok(!/z-index:\s*-1/.test(block), "fixed backdrop must not use z-index:-1");
+    assert.ok(/z-index:\s*0/.test(block), "fixed backdrop should sit at z-index:0 of its host context");
+    // host establishes an explicit local stacking context
+    assert.ok(globalsCss.includes("isolation: isolate"));
+    // app-shell host lifts content above the backdrop with positive z-index
+    assert.ok(
+      globalsCss.includes('.atelier-atmosphere-root[data-atelier-backdrop="true"] > main')
+    );
+    // auth host carries the explicit stacking-context class
+    assert.ok(globalsCss.includes(".atelier-backdrop-host"));
+    assert.ok(loginPage.includes("atelier-backdrop-host"));
+    assert.ok(signupPage.includes("atelier-backdrop-host"));
   });
 
   it("12. backdrop grain uses CSS data-URI, never an external asset", () => {
@@ -150,12 +168,20 @@ describe("Atmospheric Background System v1 — surface adoption", () => {
     assert.ok(globalsCss.includes('.atelier-atmosphere-root[data-atelier-backdrop="true"]'));
   });
 
-  it("19. Brief gets the lightest wash, not a busy photo", () => {
-    const block = globalsCss.slice(globalsCss.indexOf(".journey-desk-brief {"));
-    assert.ok(block.slice(0, 400).includes("radial-gradient"));
-    assert.ok(!block.slice(0, 400).includes("url("));
-    // brief markup unchanged structurally
+  it("19. Brief is wired through the shared registry component (claim is true)", () => {
+    // Brief must USE the shared component in absolute mode, not a one-off gradient
+    assert.ok(tripBrief.includes("AtelierBackdrop"));
+    assert.ok(tripBrief.includes('role="brief-texture"'));
+    assert.ok(tripBrief.includes('mode="absolute"'));
     assert.ok(tripBrief.includes("journey-desk-brief"));
+    // the card itself must be a positioned, clipping host for the absolute backdrop
+    assert.ok(/relative[^"]*isolate[^"]*overflow-hidden|isolate[^"]*overflow-hidden/.test(tripBrief)
+      || (tripBrief.includes("relative") && tripBrief.includes("isolate") && tripBrief.includes("overflow-hidden")));
+    // the duplicated Brief gradient must be GONE from globals.css (centrally registered now)
+    const briefStart = globalsCss.indexOf(".journey-desk-brief {");
+    const block = globalsCss.slice(briefStart, globalsCss.indexOf("}", briefStart));
+    assert.ok(!block.includes("radial-gradient"), "Brief gradient must not be duplicated in globals.css");
+    assert.ok(block.includes("background-color: transparent"), "Brief card stays transparent so the registry backdrop shows");
   });
 });
 

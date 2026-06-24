@@ -12,6 +12,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import type { Trip, ItineraryDay, ItineraryItem } from "@/types";
+import { AtelierBackdrop } from "@/components/atmosphere/AtelierBackdrop";
 import {
   deriveTripBriefSummary,
   type StaySummaryRow,
@@ -102,8 +103,14 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
     <section
       data-testid="journey-desk-brief"
       aria-label="Trip brief"
-      className="mb-4 sm:mb-6 journey-desk-brief"
+      className="relative isolate overflow-hidden mb-4 sm:mb-6 journey-desk-brief"
     >
+      {/* Atmospheric Background System v1 — brief-texture, the lightest role,
+          rendered through the shared component (absolute mode) so the Brief is
+          centrally managed like every other surface. Content sits above it. */}
+      <AtelierBackdrop role="brief-texture" mode="absolute" />
+
+      <div className="relative z-10">
       {/* Header — overline + real placed progress */}
       <div className="flex items-baseline justify-between gap-3 px-5 pt-4 pb-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ds-accent">
@@ -305,6 +312,7 @@ export function TripBrief({ days, ideas, onReview }: TripBriefProps) {
             </span>
           )}
         </div>
+      </div>
       </div>
     </section>
   );

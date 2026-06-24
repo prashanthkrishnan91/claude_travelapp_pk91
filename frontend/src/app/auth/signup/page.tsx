@@ -41,7 +41,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+    <div className="atelier-backdrop-host relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
       {/* Atmospheric Background System v1 — shares the cinematic auth-hero
           backdrop with the login screen (registry-driven). */}
       <AtelierBackdrop role="auth-hero" priority />
