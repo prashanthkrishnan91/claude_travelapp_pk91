@@ -79,6 +79,32 @@ describe("Atmospheric Background System v1 — registry", () => {
       assert.ok(!registry.includes(banned), `banned tropical color ${banned}`);
     }
   });
+
+  it("7b. auth-hero base is warm, not cold-blue (no blue-black anchors)", () => {
+    // The old cold-blue anchor set that made the login read as blue-gray.
+    // These exact hex values are replaced by warm-ink equivalents.
+    const coldBlueBanned = ["#080e16", "#0e1c2e", "#1a2b3c", "#2c3a4f"];
+    for (const banned of coldBlueBanned) {
+      assert.ok(!registry.includes(banned), `cold-blue auth anchor must be gone: ${banned}`);
+    }
+    // Warm base anchors must be present
+    assert.ok(registry.includes("#0c0906"), "warm ink base must be present");
+    assert.ok(registry.includes("#1a1208"), "warm dark amber must be present");
+  });
+
+  it("7c. warm palette anchors (gold/sand/amber) dominate the light-mode roles", () => {
+    // library-wash and desk-texture must anchor in honey/paper space, not blue-gray.
+    assert.ok(registry.includes("#f5edd8") || registry.includes("#ede0c6"), "library-wash honey anchor");
+    assert.ok(registry.includes("#eee8da") || registry.includes("#e8e0ce"), "desk-texture parchment anchor");
+    // atelier-wash must have strong warm brass bloom
+    assert.ok(registry.includes("rgba(197,148,77,0.52)") || registry.includes("rgba(197,148,77,0.5"), "atelier-wash brass bloom ≥ 48%");
+  });
+
+  it("7d. vignette token is warm ink, not cold blue-gray", () => {
+    // --ds-atelier-vignette must NOT use a blue-tinted dark (which produces cold-shell edges)
+    assert.ok(!globalsCss.includes("rgba(6, 9, 14"), "cold blue-gray vignette must be gone");
+    assert.ok(globalsCss.includes("rgba(10, 6, 3") || globalsCss.includes("rgba(8, 5, 3"), "warm ink vignette required");
+  });
 });
 
 describe("Atmospheric Background System v1 — shared component", () => {

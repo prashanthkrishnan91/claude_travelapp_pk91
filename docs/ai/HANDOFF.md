@@ -1,45 +1,32 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-23 (Atmospheric Background System v1 — branch claude/peaceful-cerf-55i63t)
+Last updated: 2026-07-07 (Atmospheric Background System v1 — warm palette v3 patch, PR #523)
 
-### Atmospheric Background System v1 (this branch)
+### Atmospheric Background System v1 — warm palette v3 (this branch)
 
-Centralized, image-capable background system layered onto the existing Paper
-Folio / Phase 8N atmosphere. Frontend-only; no backend / SQL / provider / route
-changes.
+Third iteration. User feedback on v2: "reads as beige → blue-gray" — visible retint
+but in the wrong direction (cooler/blue-gray shell, mostly-black salon).
 
-- **Registry (source of truth):** `frontend/src/lib/atmosphere/backgrounds.ts`
-  defines 5 roles — `auth-hero`, `atelier-wash`, `library-wash`, `desk-texture`,
-  `brief-texture` — each with a premium gradient placeholder, contrast scrim,
-  tone, blur, grain, focal point, and a (currently null) local image path.
-  `backdropRoleForPath()` maps routes → role.
-- **Component:** `frontend/src/components/atmosphere/AtelierBackdrop.tsx` renders
-  fixed/absolute full-bleed layers (color bed → optional `next/image` photo →
-  scrim → grain), `aria-hidden`, `pointer-events:none`, no layout shift.
-- **Assets:** none curated yet — every role renders its gradient placeholder.
-  `frontend/public/atmosphere/MANIFEST.md` documents the exact files to drop in
-  and the one-line registry edit to activate real photography. No hotlinks.
-- **Adoption:** auth (login + signup) → cinematic `auth-hero` (replaces the old
-  saturated tropical `login-bg` gradient, now deleted); AppShell wires the route
-  map behind content via `data-atelier-backdrop`; `.atelier-atmosphere-root`
-  base enriched from flat beige to a warm editorial wash on padded routes; Brief
-  card gets the lightest `brief-texture` wash.
-- **Stacking model (patched after review):** no negative z-index. Hosts
-  establish an explicit local stacking context (`isolation: isolate` on the
-  atmosphere-root when a backdrop is active, `.atelier-backdrop-host` on auth);
-  the fixed backdrop sits at `z-index:0` and sidebar/main are lifted to
-  `z-index:10`. The floating nav stays at its existing `z-index:50`.
-- **Brief (patched after review):** rendered through
-  `<AtelierBackdrop role="brief-texture" mode="absolute">` inside the positioned
-  Brief card (centrally registered, no duplicated gradient in globals.css).
-- **Tests:** `tests/atmospheric-background-system-v1.test.mjs` 25/25 (incl.
-  stacking + Brief-wiring contract); `atmospheric-boutique-art-direction-8n` 50/50
-  (8N preserved); zero new regressions across 11 shell/surface files.
-  `tsc --noEmit` clean; `next build` green.
-- **Screenshots:** could not be captured in the web preview env (no system
-  browser; Playwright Chromium download blocked by network policy; authenticated
-  surfaces need a live Supabase session + backend). Verify locally via
-  `npm run dev`.
+**Root causes diagnosed and fixed:**
+1. `auth-hero` gradient started with cold blue-blacks (`#080e16 → #2c3a4f`) — entire dark portion read as cold ocean. Fixed: warm ink base (`#0c0906 → #4a3218`) throughout.
+2. `--ds-atelier-vignette` was `rgba(6,9,14,0.55)` — cold blue-tinted framing on every page. Fixed: `rgba(10,6,3,0.55)` (warm ink).
+3. `.atelier-atmosphere-root` had a marine-ink radial `rgba(31,66,86,0.045)` adding cool tint to the shell. Fixed: replaced with warm terracotta `rgba(181,105,75,0.07)`.
+4. `atelier-wash` brass bloom 32% at 14px blur — salon read as "mostly black". Fixed: 52% bloom, 8px blur, three distinct warm light sources.
+5. `.folio-cinema-panel::before` had cold `rgba(6,9,14,0.45)` edge vignette. Fixed: `rgba(10,6,3,0.45)`.
+
+**Changes made (v3):**
+- **`backgrounds.ts`:** `auth-hero` warm-ink base + warm radials. `atelier-wash` 52% brass bloom + 26% terracotta + 32% amber uplighting, 8px blur, warmer base `#120e08`.
+- **`globals.css`:** Warm vignette token. Marine-ink shell radial removed. `folio-cinema-shell` now has 28%/16%/22% warm radials. `folio-cinema-panel` vignette warmed. v2 room-canvas transparency fixes preserved.
+- **Tests:** 4 new tests added locking the warm palette (no cold-blue auth anchors, warm gold/amber present, warm vignette token).
+
+**Tests:** 28/28 `atmospheric-background-system-v1`; 50/50 Phase 8N; `tsc --noEmit` clean; zero new failures.
+
+**Screenshots captured** (`docs/visual-proof/pr523/`):
+- `after-login-desktop-v2.png` — live Playwright 1440×900; warm amber-brown; no blue-gray
+- `after-login-mobile-v2.png` / `after-signup-desktop-v2.png` — live Playwright
+- `before-atelier-wash.png` / `after-atelier-wash.png` — gradient ref (distinct warm sources vs barely-visible glow)
+- `before-auth-hero-gradient.png` / `after-auth-hero-gradient.png` — gradient ref (cold vs warm base)
+- Library-wash + desk-texture before/after from v2 still valid (palette unchanged in v3)
 
 ---
 
