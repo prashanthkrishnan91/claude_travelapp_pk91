@@ -5,6 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { AtelierNavArtifact } from "./AtelierNavArtifact";
+import { AtelierBackdrop } from "@/components/atmosphere/AtelierBackdrop";
+import { backdropRoleForPath } from "@/lib/atmosphere/backgrounds";
 import { supabase } from "@/lib/supabase";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -99,6 +101,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isImmersiveRoom = isHomePage || isSalonRoute || isExploreRoute || isSavedRoute || isMyTripsRoute || isTripDetailRoute;
 
+  // Atmospheric Background System v1 — central registry resolves the route to a
+  // backdrop role (library-wash / atelier-wash / desk-texture). The backdrop is
+  // a fixed full-bleed layer behind all content; content is lifted above it.
+  // Today every role renders a premium gradient placeholder; dropping a curated
+  // image into /public/atmosphere + setting the registry path activates photos.
+  const backdropRole = backdropRoleForPath(pathname);
+
   return (
     <>
       {/* Phase 8N: fixed atmospheric layers — vignette + CSS grain texture */}
@@ -108,8 +117,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className="atelier-atmosphere-root flex h-full min-h-screen"
         data-testid="atelier-atmosphere-root"
+        data-atelier-backdrop={backdropRole ? "true" : undefined}
         data-atelier-shell={isSalonRoute ? "salon" : isExploreRoute ? "explore" : isSavedRoute ? "saved" : isMyTripsRoute ? "trips" : isTripDetailRoute ? "journey-desk" : undefined}
       >
+        {/* Registry-driven atmospheric backdrop, behind all content (z below 0). */}
+        {backdropRole && <AtelierBackdrop role={backdropRole} mode="fixed" />}
         {/* SaaS sidebar — hidden on the immersive Home shell, present on every
             other route so navigation, account, sign-out stay in place. The
             Sidebar substring is preserved for the 8J nav-rescue contract.

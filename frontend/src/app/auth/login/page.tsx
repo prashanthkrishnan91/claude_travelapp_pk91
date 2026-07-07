@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { AtelierBackdrop } from "@/components/atmosphere/AtelierBackdrop";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,12 +33,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
-      {/* Luxury travel background with slow zoom */}
-      <div className="login-bg-wrap" aria-hidden="true">
-        <div className="login-bg" />
-      </div>
-      <div className="login-overlay" aria-hidden="true" />
+    <div className="atelier-backdrop-host relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      {/* Atmospheric Background System v1 — cinematic auth-hero backdrop.
+          Registry-driven (lib/atmosphere/backgrounds.ts); placeholder gradient
+          until a curated /atmosphere/auth-hero.jpg is supplied. */}
+      <AtelierBackdrop role="auth-hero" priority />
 
       <div className="relative z-10 w-full max-w-md">
         <h1 className="text-2xl font-bold text-white mb-2 text-center" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>

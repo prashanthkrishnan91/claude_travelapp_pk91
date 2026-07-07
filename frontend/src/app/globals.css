@@ -849,48 +849,12 @@
     );
   }
 
-  /* ── Login luxury background ─────────────────────────────────────── */
-  .login-bg-wrap {
-    position: absolute;
-    inset: -10%;
-    overflow: hidden;
-    z-index: 0;
-  }
-
-  .login-bg {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      145deg,
-      #0c1445 0%,
-      #1a3a6e 18%,
-      #0e6ba8 35%,
-      #0a9396 50%,
-      #94d2bd 65%,
-      #e9d8a6 80%,
-      #ee9b00 100%
-    );
-    filter: blur(12px) brightness(0.75);
-    animation: luxury-zoom 28s ease-in-out infinite alternate;
-    will-change: transform;
-  }
-
-  @keyframes luxury-zoom {
-    from { transform: scale(1); }
-    to   { transform: scale(1.14); }
-  }
-
-  .login-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    background: linear-gradient(
-      to bottom,
-      rgba(15, 23, 42, 0.45) 0%,
-      rgba(15, 23, 42, 0.20) 40%,
-      rgba(15, 23, 42, 0.30) 100%
-    );
-  }
+  /* ── Login background ────────────────────────────────────────────
+     Superseded by the Atmospheric Background System v1 (<AtelierBackdrop
+     role="auth-hero">). The old saturated tropical animated gradient was
+     removed — it violated the premium editorial art direction (no postcard /
+     tourism-board imagery). Auth now shares the registry-driven cinematic
+     dusk hero. */
 
   /* ── Sidebar nav items ──────────────────────────────────────── */
   .nav-item {
@@ -1040,17 +1004,20 @@
   /* ── Atelier atmosphere root
      The outermost authenticated wrapper. Provides the warm dark base
      and coordinates child pseudo-element layers. */
+  /* Atmospheric Background System v1 — warm editorial paper wash on the shell
+     base. Replaces the flat single-radial beige with layered depth (warm gold
+     dawn at the top, a soft dusk-marine breath, a muted-sand floor) while
+     staying in the cream / paper / ink identity. radial-gradient + rgba only,
+     no url(). Comment kept above the rule so the 8N/Folio 400-char window
+     checks (warm-paper + radial-gradient) still resolve inside the block. */
   .atelier-atmosphere-root {
     position: relative;
-    /* Folio Slice 1: paper-world shell. Warm linen as the default chrome. */
     background-color: var(--ds-warm-paper);
-    /* Subtle warm radial from top — desk-lamp atmosphere on paper canvas */
     background-image:
-      radial-gradient(
-        ellipse 80% 40% at 50% -5%,
-        rgba(31, 66, 86, 0.04) 0%,
-        transparent 70%
-      );
+      radial-gradient(ellipse 90% 42% at 50% -6%, rgba(197, 148, 77, 0.07) 0%, transparent 64%),
+      radial-gradient(ellipse 70% 50% at 88% 2%, rgba(110, 106, 74, 0.05) 0%, transparent 62%),
+      radial-gradient(ellipse 80% 40% at 50% -5%, rgba(31, 66, 86, 0.045) 0%, transparent 70%),
+      radial-gradient(ellipse 120% 60% at 50% 112%, rgba(203, 182, 143, 0.10) 0%, transparent 66%);
   }
 
   /* ── Vignette layer
@@ -1149,6 +1116,93 @@
      on featured section headers for a warmer editorial divider. */
   .atelier-accent-line {
     border-top: 1px solid color-mix(in srgb, var(--ds-ember-brass) 18%, var(--ds-pen-stroke));
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ATMOSPHERIC BACKGROUND SYSTEM v1
+     Image-capable cinematic backdrop, controlled centrally by
+     lib/atmosphere/backgrounds.ts and rendered by <AtelierBackdrop>.
+     The gradient color bed + scrim + grain are inline (registry-driven);
+     this block owns the layer geometry only — so swapping a placeholder
+     for a curated photo never touches CSS. Full-bleed, never in flow,
+     so it cannot cause layout shift. All layers are decorative.
+     ════════════════════════════════════════════════════════════════ */
+  .atelier-backdrop {
+    pointer-events: none;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .atelier-backdrop--fixed {
+    position: fixed;
+    inset: 0;
+    /* z-index 0 (NOT negative): the backdrop is the lowest layer of an explicit
+       local stacking context owned by its host, so it can never paint behind the
+       document/body canvas. Hosts lift their chrome/content above it with a
+       positive z-index (see the app-shell + auth rules below). */
+    z-index: 0;
+  }
+  /* App-shell host: establish an explicit local stacking context, drop the
+     opaque paper base so the registry backdrop bed is the visible canvas, and
+     lift sidebar / floating nav / main content above the backdrop. No negative
+     z-index anywhere. Non-backdrop routes keep the enriched warm wash above. */
+  .atelier-atmosphere-root[data-atelier-backdrop="true"] {
+    background-color: transparent;
+    background-image: none;
+    isolation: isolate;
+  }
+  /* Sidebar + main content lifted above the backdrop. The floating
+     .atelier-nav-artifact-root is already fixed at z-index:50 (inside this
+     isolated context, so above the backdrop) and is intentionally not touched. */
+  .atelier-atmosphere-root[data-atelier-backdrop="true"] > .folio-sidebar,
+  .atelier-atmosphere-root[data-atelier-backdrop="true"] > main {
+    position: relative;
+    z-index: 10;
+  }
+  /* Auth host: the login/signup wrapper carries .atelier-backdrop-host to make
+     its stacking context explicit; its form column already sits at z-10. */
+  .atelier-backdrop-host {
+    isolation: isolate;
+  }
+  .atelier-backdrop--absolute {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+  }
+  .atelier-backdrop__bed,
+  .atelier-backdrop__photo,
+  .atelier-backdrop__scrim,
+  .atelier-backdrop__grain {
+    position: absolute;
+    inset: 0;
+  }
+  /* Color bed — the always-present gradient mood (registry `placeholder`). */
+  .atelier-backdrop__bed {
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+  }
+  /* Photo layer — next/image fill mounts inside; blur is applied inline. */
+  .atelier-backdrop__photo {
+    /* scale slightly so the soft blur never reveals a hard edge */
+    transform: scale(1.06);
+    will-change: transform;
+  }
+  /* Contrast scrim — registry `scrim` gradient. */
+  .atelier-backdrop__scrim {
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+  /* Film grain — CSS data-URI turbulence, no external asset. */
+  .atelier-backdrop__grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='ab'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23ab)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 170px 170px;
+    mix-blend-mode: soft-light;
+    opacity: 0.05;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atelier-backdrop__photo { transform: none; }
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -9386,7 +9440,12 @@
   /* Calm Brief — warm paper panel under the cover. Answers, in one glance:
      where · what is fixed · what still needs choosing. */
   .journey-desk-brief {
-    background: var(--ds-warm-paper);
+    /* Atmospheric Background System v1 — the brief-texture wash is rendered by
+       the shared <AtelierBackdrop role="brief-texture" mode="absolute"> inside
+       this card (centrally registered, not a one-off gradient here). This rule
+       owns only structural chrome; the card stays transparent so the backdrop
+       bed shows through and rounds with the border-radius (inherited). */
+    background-color: transparent;
     border: 1px solid var(--ds-hairline);
     border-radius: 14px;
     box-shadow: var(--ds-paper-elevation-1);

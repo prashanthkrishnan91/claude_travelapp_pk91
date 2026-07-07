@@ -1,6 +1,47 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-23 (Saved Items metadata parity — PR #521 merged)
+Last updated: 2026-06-23 (Atmospheric Background System v1 — branch claude/peaceful-cerf-55i63t)
+
+### Atmospheric Background System v1 (this branch)
+
+Centralized, image-capable background system layered onto the existing Paper
+Folio / Phase 8N atmosphere. Frontend-only; no backend / SQL / provider / route
+changes.
+
+- **Registry (source of truth):** `frontend/src/lib/atmosphere/backgrounds.ts`
+  defines 5 roles — `auth-hero`, `atelier-wash`, `library-wash`, `desk-texture`,
+  `brief-texture` — each with a premium gradient placeholder, contrast scrim,
+  tone, blur, grain, focal point, and a (currently null) local image path.
+  `backdropRoleForPath()` maps routes → role.
+- **Component:** `frontend/src/components/atmosphere/AtelierBackdrop.tsx` renders
+  fixed/absolute full-bleed layers (color bed → optional `next/image` photo →
+  scrim → grain), `aria-hidden`, `pointer-events:none`, no layout shift.
+- **Assets:** none curated yet — every role renders its gradient placeholder.
+  `frontend/public/atmosphere/MANIFEST.md` documents the exact files to drop in
+  and the one-line registry edit to activate real photography. No hotlinks.
+- **Adoption:** auth (login + signup) → cinematic `auth-hero` (replaces the old
+  saturated tropical `login-bg` gradient, now deleted); AppShell wires the route
+  map behind content via `data-atelier-backdrop`; `.atelier-atmosphere-root`
+  base enriched from flat beige to a warm editorial wash on padded routes; Brief
+  card gets the lightest `brief-texture` wash.
+- **Stacking model (patched after review):** no negative z-index. Hosts
+  establish an explicit local stacking context (`isolation: isolate` on the
+  atmosphere-root when a backdrop is active, `.atelier-backdrop-host` on auth);
+  the fixed backdrop sits at `z-index:0` and sidebar/main are lifted to
+  `z-index:10`. The floating nav stays at its existing `z-index:50`.
+- **Brief (patched after review):** rendered through
+  `<AtelierBackdrop role="brief-texture" mode="absolute">` inside the positioned
+  Brief card (centrally registered, no duplicated gradient in globals.css).
+- **Tests:** `tests/atmospheric-background-system-v1.test.mjs` 25/25 (incl.
+  stacking + Brief-wiring contract); `atmospheric-boutique-art-direction-8n` 50/50
+  (8N preserved); zero new regressions across 11 shell/surface files.
+  `tsc --noEmit` clean; `next build` green.
+- **Screenshots:** could not be captured in the web preview env (no system
+  browser; Playwright Chromium download blocked by network policy; authenticated
+  surfaces need a live Supabase session + backend). Verify locally via
+  `npm run dev`.
+
+---
 
 ### Saved Items → itinerary path metadata parity (merged PR #521)
 

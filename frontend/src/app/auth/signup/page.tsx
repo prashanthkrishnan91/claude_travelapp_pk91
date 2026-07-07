@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { AtelierBackdrop } from "@/components/atmosphere/AtelierBackdrop";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,12 +41,16 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+    <div className="atelier-backdrop-host relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      {/* Atmospheric Background System v1 — shares the cinematic auth-hero
+          backdrop with the login screen (registry-driven). */}
+      <AtelierBackdrop role="auth-hero" priority />
+
+      <div className="relative z-10 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-white mb-2 text-center" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>
           Travel Concierge
         </h1>
-        <p className="text-sm text-gray-500 text-center mb-8">
+        <p className="text-sm text-white/75 text-center mb-8">
           Create your account
         </p>
 
