@@ -1,45 +1,53 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-06-23 (Atmospheric Background System v1 — branch claude/peaceful-cerf-55i63t)
+Last updated: 2026-07-07 (Atmospheric Background System v1 — visual-delta patch, PR #523)
 
-### Atmospheric Background System v1 (this branch)
+### Atmospheric Background System v1 — visual-delta patch (this branch)
 
-Centralized, image-capable background system layered onto the existing Paper
-Folio / Phase 8N atmosphere. Frontend-only; no backend / SQL / provider / route
-changes.
+Second patch to the centralized cinematic backdrop system. Addresses PK's
+review finding that the first patch produced no visible visual change.
 
-- **Registry (source of truth):** `frontend/src/lib/atmosphere/backgrounds.ts`
-  defines 5 roles — `auth-hero`, `atelier-wash`, `library-wash`, `desk-texture`,
-  `brief-texture` — each with a premium gradient placeholder, contrast scrim,
-  tone, blur, grain, focal point, and a (currently null) local image path.
-  `backdropRoleForPath()` maps routes → role.
-- **Component:** `frontend/src/components/atmosphere/AtelierBackdrop.tsx` renders
-  fixed/absolute full-bleed layers (color bed → optional `next/image` photo →
-  scrim → grain), `aria-hidden`, `pointer-events:none`, no layout shift.
-- **Assets:** none curated yet — every role renders its gradient placeholder.
-  `frontend/public/atmosphere/MANIFEST.md` documents the exact files to drop in
-  and the one-line registry edit to activate real photography. No hotlinks.
-- **Adoption:** auth (login + signup) → cinematic `auth-hero` (replaces the old
-  saturated tropical `login-bg` gradient, now deleted); AppShell wires the route
-  map behind content via `data-atelier-backdrop`; `.atelier-atmosphere-root`
-  base enriched from flat beige to a warm editorial wash on padded routes; Brief
-  card gets the lightest `brief-texture` wash.
-- **Stacking model (patched after review):** no negative z-index. Hosts
-  establish an explicit local stacking context (`isolation: isolate` on the
-  atmosphere-root when a backdrop is active, `.atelier-backdrop-host` on auth);
-  the fixed backdrop sits at `z-index:0` and sidebar/main are lifted to
-  `z-index:10`. The floating nav stays at its existing `z-index:50`.
-- **Brief (patched after review):** rendered through
-  `<AtelierBackdrop role="brief-texture" mode="absolute">` inside the positioned
-  Brief card (centrally registered, no duplicated gradient in globals.css).
-- **Tests:** `tests/atmospheric-background-system-v1.test.mjs` 25/25 (incl.
-  stacking + Brief-wiring contract); `atmospheric-boutique-art-direction-8n` 50/50
-  (8N preserved); zero new regressions across 11 shell/surface files.
-  `tsc --noEmit` clean; `next build` green.
-- **Screenshots:** could not be captured in the web preview env (no system
-  browser; Playwright Chromium download blocked by network policy; authenticated
-  surfaces need a live Supabase session + backend). Verify locally via
-  `npm run dev`.
+**Root cause (diagnosed in this patch):** Phase 8N room-canvas classes
+(`.trips-room-canvas`, `.journey-desk-room-canvas`, `.atelier-atrium-neutral`,
+`.folio-cinema-shell`) all had fully-opaque `background-color` values that
+completely blocked the fixed `<AtelierBackdrop>` layer. The backdrop existed
+but was invisible because solid page backgrounds sat on top of it.
+
+**Changes made:**
+- **`backgrounds.ts` — all 5 registry placeholders strengthened:**
+  - `auth-hero`: gradient is now dramatically more cinematic — deeper night base
+    (#080e16), luminous amber/gold bloom (85% opacity) rising from below,
+    strong marine cooldown above. Reads as "golden-hour over calm water" at a
+    glance. Scrim pushed from 0.42 to 0.62 at top and 0.58→0.70 at bottom.
+  - `atelier-wash`: brass bloom strengthened (20% → 32%), terracotta accent added
+    at bottom, base is richer warm near-black (#0a0806).
+  - `library-wash`: gold top bloom tripled (10% → 28%); olive radial added (18%);
+    base colour shifts from near-white (#faf7f0) to honey amber (#f5edd8) — the
+    editorial paper ground is now clearly warm, not flat beige.
+  - `desk-texture`: marine-ink bloom doubled (6% → 14%); parchment base shifts
+    from cream (#f7f3ea) to cool parchment (#eee8da) — cartographic depth
+    detectable while staying restrained behind itinerary cards.
+  - `brief-texture`: unchanged (lightest role; maximum legibility).
+- **`globals.css` — room-canvas backgrounds made transparent:**
+  - `.trips-room-canvas`: `background-color` → `transparent` (radials only)
+  - `.journey-desk-room-canvas`: `background-color` → `transparent` (radials only)
+  - `.folio-cinema-shell`: `background-color` → `transparent` (radials only)
+  - `.atelier-atrium-neutral`: top of `linear-gradient` now `rgba(0→0.72)` so the
+    `library-wash` backdrop bleeds through the hero zone
+- **Saved (`.folio-private-desk`) NOT changed:** Saved uses `atelier-wash` (dark
+  cinema) as its backdrop role but renders as a light paper world. Making the dark
+  backdrop bleed through the light desk is wrong; the backdrop-role assignment for
+  Saved should be revisited separately.
+
+**Screenshots captured in this environment** (`docs/visual-proof/pr523/`):
+- `before-login-reference.png` / `after-login-desktop.png` / `after-login-mobile.png`
+- `before-library-wash.png` / `after-library-wash.png`
+- `before-desk-texture.png` / `after-desk-texture.png`
+- `after-signup-desktop.png`
+
+**Tests:** 25/25 `atmospheric-background-system-v1`; 50/50 Phase 8N; 1 pre-existing
+failure (test #62, loading skeleton folio-paper-panel); zero new failures.
+`tsc --noEmit` clean.
 
 ---
 

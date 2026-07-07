@@ -1900,17 +1900,19 @@
      ════════════════════════════════════════════════════════════════ */
 
   /* folio-cinema-shell: outermost dark wrapper for cinema-world routes.
-     Provides warm dark base (ds-cinema-deep) for AI Concierge, Explore, Discover.
-     Apply alongside editorial-scene; cinema-shell wins background-image
-     (later declaration). Children render cream/pearl text correctly. */
+     Provides warm dark base for AI Concierge, Explore, Discover.
+     background-color is now transparent so the fixed atelier-wash backdrop
+     (warm brass bloom on near-black) is the actual canvas; the local radial
+     only adds a toplight accent. backdrop-color falls back to ds-cinema-deep
+     only if the <AtelierBackdrop> is not mounted (edge case). */
   .folio-cinema-shell {
     position: relative;
-    background-color: var(--ds-cinema-deep);
+    background-color: transparent;
     background-image:
       radial-gradient(
-        ellipse 80% 40% at 50% -5%,
-        rgba(180, 130, 60, 0.08) 0%,
-        transparent 70%
+        ellipse 82% 44% at 50% -5%,
+        rgba(197, 148, 77, 0.14) 0%,
+        transparent 68%
       );
   }
 
@@ -4317,17 +4319,22 @@
 
   /* Neutral atrium — Alabaster room with a quiet paper-warm wash.
      Overrides the destination --world-bg on the home atrium so the
-     destination scenery only lives inside artifacts. */
+     destination scenery only lives inside artifacts.
+     The top of the gradient is now semi-transparent (rgba 0→0.72) so the
+     fixed library-wash backdrop bleeds through the hero zone, making the
+     warm editorial atmosphere immediately perceptible above the card shelf. */
   .atelier-atrium-neutral {
     background-image:
-      radial-gradient(ellipse 80% 40% at 50% 0%,
-        color-mix(in srgb, var(--ds-ember-brass) 6%, transparent),
-        transparent 70%),
-      radial-gradient(ellipse 60% 50% at 12% 88%,
-        color-mix(in srgb, var(--ds-sandstone-gold) 5%, transparent),
+      radial-gradient(ellipse 82% 44% at 50% 0%,
+        color-mix(in srgb, var(--ds-ember-brass) 14%, transparent),
+        transparent 68%),
+      radial-gradient(ellipse 62% 52% at 12% 88%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 10%, transparent),
         transparent 70%),
       linear-gradient(180deg,
-        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 0%,
+        rgba(245,237,216,0)    0%,
+        rgba(245,237,216,0.72) 22%,
+        color-mix(in srgb, var(--ds-warm-paper) 96%, white) 44%,
         color-mix(in srgb, var(--ds-bone) 78%, var(--ds-warm-paper)) 100%);
   }
 
@@ -9346,17 +9353,19 @@
      centered stack. Distinct from .trips-room-canvas / .trips-shelf-stage. */
 
   /* The warm desk the planning folio rests on — mirrors .trips-room-canvas but
-     the top ambient is marine-cool (work surface), not sandstone-warm (reading). */
+     the top ambient is marine-cool (work surface), not sandstone-warm (reading).
+     background-color is transparent so the fixed desk-texture backdrop (cool
+     parchment with marine tint) is the actual canvas; radials add depth on top. */
   .journey-desk-room-canvas {
     position: relative;
     min-height: 100svh;
     padding: clamp(16px, 2.5vw, 44px) clamp(12px, 2vw, 36px) clamp(80px, 12vh, 112px);
-    background-color: color-mix(in srgb, var(--ds-linen) 82%, var(--ds-warm-paper));
+    background-color: transparent;
     background-image:
-      radial-gradient(ellipse 80% 46% at 50% -8%,
-        color-mix(in srgb, var(--ds-marine-ink) 14%, transparent) 0%, transparent 60%),
-      radial-gradient(ellipse 64% 42% at 94% 104%,
-        color-mix(in srgb, var(--ds-ember-brass) 12%, transparent) 0%, transparent 60%);
+      radial-gradient(ellipse 82% 48% at 50% -8%,
+        color-mix(in srgb, var(--ds-marine-ink) 18%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 66% 44% at 94% 104%,
+        color-mix(in srgb, var(--ds-ember-brass) 15%, transparent) 0%, transparent 60%);
     isolation: isolate;
   }
 
@@ -9922,17 +9931,19 @@
      Saved Private Folio desk pattern (folio-private-desk) so /trips adopts the
      same immersive page-room treatment as the stronger pages: a full-bleed warm
      linen field with quiet radial ambient depth (no dark takeover, no noisy
-     texture). The floating paper stage rests on top of it. */
+     texture). The floating paper stage rests on top of it.
+     background-color is transparent so the fixed library-wash backdrop (warm
+     honey gradient) is the actual canvas; radials add localised depth on top. */
   .trips-room-canvas {
     position: relative;
     min-height: 100svh;
     padding: clamp(16px, 2.5vw, 44px) clamp(12px, 2vw, 36px) clamp(80px, 12vh, 112px);
-    background-color: color-mix(in srgb, var(--ds-linen) 80%, var(--ds-warm-paper));
+    background-color: transparent;
     background-image:
-      radial-gradient(ellipse 82% 48% at 50% -8%,
-        color-mix(in srgb, var(--ds-sandstone-gold) 20%, transparent) 0%, transparent 60%),
-      radial-gradient(ellipse 66% 44% at 92% 104%,
-        color-mix(in srgb, var(--ds-ember-brass) 13%, transparent) 0%, transparent 60%);
+      radial-gradient(ellipse 84% 50% at 50% -8%,
+        color-mix(in srgb, var(--ds-sandstone-gold) 26%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 68% 46% at 92% 104%,
+        color-mix(in srgb, var(--ds-ember-brass) 18%, transparent) 0%, transparent 60%);
     isolation: isolate;
   }
 

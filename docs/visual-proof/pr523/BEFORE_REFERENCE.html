@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PR #523 — Before (reference gradient)</title>
+<style>
+body { margin: 0; font-family: system-ui, sans-serif; }
+.scene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  /* OLD auth-hero gradient */
+  background-image:
+    radial-gradient(120% 80% at 50% 118%, rgba(197,148,77,0.42) 0%, rgba(197,148,77,0) 52%),
+    radial-gradient(100% 70% at 18% -10%, rgba(44,58,79,0.55) 0%, rgba(44,58,79,0) 60%),
+    linear-gradient(195deg,
+      #14202c 0%,
+      #1f3142 26%,
+      #2c3a4f 46%,
+      #5a5238 70%,
+      #8a6a3f 86%,
+      #c5944d 100%);
+}
+.card {
+  position: relative;
+  z-index: 10;
+  width: 400px;
+  padding: 2rem;
+  background: rgba(18,17,14,0.95);
+  border: 1px solid rgba(220,205,180,0.07);
+  border-radius: 1rem;
+  backdrop-filter: blur(20px);
+}
+h1 { color: white; text-align: center; margin: 0 0 0.5rem; font-size: 1.5rem; }
+p  { color: rgba(255,255,255,0.75); text-align: center; margin: 0 0 2rem; font-size: 0.875rem; }
+input { display: block; width: 100%; margin-bottom: 1rem; padding: 0.625rem; border-radius: 0.5rem; background: rgba(30,26,20,0.9); border: 1px solid rgba(220,205,180,0.18); color: white; font-size: 0.875rem; box-sizing: border-box; }
+button { display: block; width: 100%; padding: 0.75rem; border: none; border-radius: 0.75rem; background: linear-gradient(135deg,#e0b888 0%,#c5944d 55%,#8a6230 100%); color: #1a1208; font-weight: 600; font-size: 0.875rem; cursor: pointer; }
+.label { display: block; color: rgba(200,190,175,0.8); font-size: 0.8rem; margin-bottom: 0.35rem; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="card">
+    <h1>Travel Concierge</h1>
+    <p>Sign in to your account</p>
+    <div>
+      <span class="label">Email</span>
+      <input type="email" placeholder="you@example.com">
+    </div>
+    <div>
+      <span class="label">Password</span>
+      <input type="password" placeholder="••••••••">
+    </div>
+    <button>Sign in</button>
+  </div>
+</div>
+</body>
+</html>

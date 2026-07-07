@@ -85,25 +85,31 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 38%",
     tone: "cinema",
-    // Cinematic dusk-over-water golden-hour mood: deep marine → dusk blue
-    // lifting to warm gold + muted sand at the horizon, with an ink vignette.
+    // Cinematic golden-hour over calm water: the sky descends from deep night
+    // (#0a1018) through rich dusk-blue (#1a2b3c) into a luminous amber horizon
+    // (#c5944d → #e0b888). Two radial blooms push warm gold up from the bottom
+    // and cool marine down from the top to give the gradient clear directionality.
+    // Far stronger than the previous muted version — readable from across the room.
     placeholder: `
-      radial-gradient(120% 80% at 50% 118%, rgba(197,148,77,0.42) 0%, rgba(197,148,77,0) 52%),
-      radial-gradient(100% 70% at 18% -10%, rgba(44,58,79,0.55) 0%, rgba(44,58,79,0) 60%),
-      linear-gradient(195deg,
-        #14202c 0%,
-        #1f3142 26%,
-        #2c3a4f 46%,
-        #5a5238 70%,
-        #8a6a3f 86%,
-        #c5944d 100%)
+      radial-gradient(150% 100% at 50% 125%, rgba(224,184,136,0.85) 0%, rgba(197,148,77,0.55) 28%, rgba(197,148,77,0) 58%),
+      radial-gradient(110% 75% at 14% -8%,  rgba(20,32,48,0.90)  0%, rgba(20,32,48,0)   52%),
+      radial-gradient( 90% 60% at 88%  4%,  rgba(44,58,79,0.55)  0%, rgba(44,58,79,0)   55%),
+      linear-gradient(185deg,
+        #080e16 0%,
+        #0e1c2e 18%,
+        #1a2b3c 34%,
+        #2c3a4f 48%,
+        #4a3e2a 64%,
+        #8a6230 80%,
+        #c5944d 92%,
+        #e0b888 100%)
     `,
     scrim: `
       linear-gradient(to bottom,
-        rgba(11,12,16,0.42) 0%,
-        rgba(11,12,16,0.18) 38%,
-        rgba(11,12,16,0.34) 72%,
-        rgba(11,12,16,0.58) 100%)
+        rgba(6,8,12,0.62) 0%,
+        rgba(6,8,12,0.26) 32%,
+        rgba(6,8,12,0.18) 58%,
+        rgba(6,8,12,0.70) 100%)
     `,
     blurPx: 0,
     grain: true,
@@ -117,23 +123,26 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 42%",
     tone: "cinema",
-    // Immersive warm atelier — ember-brass glow off a deep onyx room, with a
-    // terracotta whisper. Richer than beige, still calm behind dense UI.
+    // Immersive warm atelier — the boutique lobby at golden hour. A strong
+    // brass bloom (32%) at the upper-left reads as a window of warm light;
+    // a terracotta accent (18%) at the lower-right grounds the room. The base
+    // is warm near-black (#0e0b08) so surfaces set against it feel luxurious.
     placeholder: `
-      radial-gradient(80% 55% at 24% -8%, rgba(197,148,77,0.20) 0%, rgba(197,148,77,0) 58%),
-      radial-gradient(70% 60% at 92% 8%, rgba(181,105,75,0.12) 0%, rgba(181,105,75,0) 60%),
-      linear-gradient(180deg, #100e0b 0%, #15120e 40%, #1b1712 100%)
+      radial-gradient(85% 58% at 22% -6%, rgba(197,148,77,0.32) 0%, rgba(197,148,77,0) 56%),
+      radial-gradient(72% 62% at 94%  8%, rgba(181,105,75,0.18) 0%, rgba(181,105,75,0) 58%),
+      radial-gradient(60% 50% at 50% 105%, rgba(140,88,44,0.22) 0%, rgba(140,88,44,0) 55%),
+      linear-gradient(180deg, #0a0806 0%, #0e0b08 38%, #141008 70%, #1a1410 100%)
     `,
     scrim: `
       linear-gradient(to bottom,
-        rgba(11,10,8,0.30) 0%,
-        rgba(11,10,8,0.12) 45%,
-        rgba(11,10,8,0.40) 100%)
+        rgba(8,7,5,0.35) 0%,
+        rgba(8,7,5,0.10) 42%,
+        rgba(8,7,5,0.38) 100%)
     `,
     blurPx: 14,
     grain: true,
     brief:
-      "Concierge / Explore / Saved immersive mood. Boutique-lobby golden-hour, blurred and atmospheric.",
+      "Concierge / Explore / Saved immersive mood. Boutique-lobby at golden hour, blurred and atmospheric.",
   },
 
   "library-wash": {
@@ -142,23 +151,27 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 35%",
     tone: "paper",
-    // Calm editorial paper world with warm depth — linen lifting to a soft
-    // gold dawn at the top and a muted-sand floor. Trip cards stay legible.
+    // Editorial paper library with clearly warm depth — a visible gold-dawn
+    // bloom at the top (~22% opacity vs the old 10%), a terracotta whisper at
+    // the lower corner, and a base that shifts from warm honey (#ede0c4) up to
+    // burnished cream (#f5edd8). The gradient reads as "warm and editorial"
+    // rather than "flat beige" when seen against white page chrome.
     placeholder: `
-      radial-gradient(90% 45% at 50% -6%, rgba(197,148,77,0.10) 0%, rgba(197,148,77,0) 60%),
-      radial-gradient(70% 50% at 88% 4%, rgba(110,106,74,0.07) 0%, rgba(110,106,74,0) 62%),
-      linear-gradient(180deg, #faf7f0 0%, #f3eee2 52%, #ece4d2 100%)
+      radial-gradient(92% 52% at 50% -4%,  rgba(197,148,77,0.28) 0%, rgba(197,148,77,0) 56%),
+      radial-gradient(72% 54% at 88%  3%,  rgba(110,106,74,0.18) 0%, rgba(110,106,74,0) 60%),
+      radial-gradient(80% 60% at  6% 98%,  rgba(181,105,75,0.12) 0%, rgba(181,105,75,0) 65%),
+      linear-gradient(180deg, #f5edd8 0%, #ede0c6 48%, #e6d8b8 100%)
     `,
     scrim: `
       linear-gradient(to bottom,
-        rgba(250,247,240,0.30) 0%,
-        rgba(250,247,240,0.05) 40%,
-        rgba(236,228,210,0.22) 100%)
+        rgba(245,237,216,0.18) 0%,
+        rgba(245,237,216,0)    28%,
+        rgba(230,216,184,0.15) 100%)
     `,
     blurPx: 18,
     grain: false,
     brief:
-      "Home / My Trips editorial atmosphere. Warm paper depth, calm enough for trip cards.",
+      "Home / My Trips editorial atmosphere. Warm honey-paper depth, calm enough for trip cards.",
   },
 
   "desk-texture": {
@@ -167,18 +180,22 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 50%",
     tone: "paper",
-    // Journey Desk — restrained. Subtle map/paper wash + a faint scenic glow,
-    // never a busy photo behind itinerary cards.
+    // Journey Desk — restrained but detectable. A marine-cool bloom at the top
+    // (14% opacity) gives the work surface a map/cartographic quality distinct
+    // from the library-wash's gold-warm reading room. A softer amber corner
+    // adds warmth so the desk doesn't feel sterile. Base is a cool-tinted
+    // parchment (#eee8da) so the atmosphere is perceptible at a glance.
     placeholder: `
-      radial-gradient(120% 70% at 50% -20%, rgba(44,58,79,0.06) 0%, rgba(44,58,79,0) 62%),
-      radial-gradient(60% 50% at 6% 18%, rgba(197,148,77,0.06) 0%, rgba(197,148,77,0) 60%),
-      linear-gradient(180deg, #f7f3ea 0%, #f1ebdd 60%, #ebe3d1 100%)
+      radial-gradient(120% 72% at 50% -16%, rgba(44,58,79,0.14) 0%, rgba(44,58,79,0) 60%),
+      radial-gradient( 60% 52% at  6% 18%, rgba(197,148,77,0.11) 0%, rgba(197,148,77,0) 58%),
+      radial-gradient( 50% 42% at 96% 82%, rgba(110,106,74,0.08) 0%, rgba(110,106,74,0) 55%),
+      linear-gradient(180deg, #eee8da 0%, #e8e0ce 55%, #e2d8c4 100%)
     `,
-    scrim: `linear-gradient(to bottom, rgba(247,243,234,0.42) 0%, rgba(235,227,209,0.30) 100%)`,
+    scrim: `linear-gradient(to bottom, rgba(238,232,218,0.38) 0%, rgba(226,216,196,0.25) 100%)`,
     blurPx: 22,
     grain: false,
     brief:
-      "Journey Desk / Trip Detail. Subtle scenic wash or archival-map texture behind the paper desk.",
+      "Journey Desk / Trip Detail. Subtle map/cartographic wash behind the paper planning desk.",
   },
 
   "brief-texture": {
