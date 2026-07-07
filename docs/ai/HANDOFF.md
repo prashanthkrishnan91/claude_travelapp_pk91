@@ -1,53 +1,32 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-07 (Atmospheric Background System v1 — visual-delta patch, PR #523)
+Last updated: 2026-07-07 (Atmospheric Background System v1 — warm palette v3 patch, PR #523)
 
-### Atmospheric Background System v1 — visual-delta patch (this branch)
+### Atmospheric Background System v1 — warm palette v3 (this branch)
 
-Second patch to the centralized cinematic backdrop system. Addresses PK's
-review finding that the first patch produced no visible visual change.
+Third iteration. User feedback on v2: "reads as beige → blue-gray" — visible retint
+but in the wrong direction (cooler/blue-gray shell, mostly-black salon).
 
-**Root cause (diagnosed in this patch):** Phase 8N room-canvas classes
-(`.trips-room-canvas`, `.journey-desk-room-canvas`, `.atelier-atrium-neutral`,
-`.folio-cinema-shell`) all had fully-opaque `background-color` values that
-completely blocked the fixed `<AtelierBackdrop>` layer. The backdrop existed
-but was invisible because solid page backgrounds sat on top of it.
+**Root causes diagnosed and fixed:**
+1. `auth-hero` gradient started with cold blue-blacks (`#080e16 → #2c3a4f`) — entire dark portion read as cold ocean. Fixed: warm ink base (`#0c0906 → #4a3218`) throughout.
+2. `--ds-atelier-vignette` was `rgba(6,9,14,0.55)` — cold blue-tinted framing on every page. Fixed: `rgba(10,6,3,0.55)` (warm ink).
+3. `.atelier-atmosphere-root` had a marine-ink radial `rgba(31,66,86,0.045)` adding cool tint to the shell. Fixed: replaced with warm terracotta `rgba(181,105,75,0.07)`.
+4. `atelier-wash` brass bloom 32% at 14px blur — salon read as "mostly black". Fixed: 52% bloom, 8px blur, three distinct warm light sources.
+5. `.folio-cinema-panel::before` had cold `rgba(6,9,14,0.45)` edge vignette. Fixed: `rgba(10,6,3,0.45)`.
 
-**Changes made:**
-- **`backgrounds.ts` — all 5 registry placeholders strengthened:**
-  - `auth-hero`: gradient is now dramatically more cinematic — deeper night base
-    (#080e16), luminous amber/gold bloom (85% opacity) rising from below,
-    strong marine cooldown above. Reads as "golden-hour over calm water" at a
-    glance. Scrim pushed from 0.42 to 0.62 at top and 0.58→0.70 at bottom.
-  - `atelier-wash`: brass bloom strengthened (20% → 32%), terracotta accent added
-    at bottom, base is richer warm near-black (#0a0806).
-  - `library-wash`: gold top bloom tripled (10% → 28%); olive radial added (18%);
-    base colour shifts from near-white (#faf7f0) to honey amber (#f5edd8) — the
-    editorial paper ground is now clearly warm, not flat beige.
-  - `desk-texture`: marine-ink bloom doubled (6% → 14%); parchment base shifts
-    from cream (#f7f3ea) to cool parchment (#eee8da) — cartographic depth
-    detectable while staying restrained behind itinerary cards.
-  - `brief-texture`: unchanged (lightest role; maximum legibility).
-- **`globals.css` — room-canvas backgrounds made transparent:**
-  - `.trips-room-canvas`: `background-color` → `transparent` (radials only)
-  - `.journey-desk-room-canvas`: `background-color` → `transparent` (radials only)
-  - `.folio-cinema-shell`: `background-color` → `transparent` (radials only)
-  - `.atelier-atrium-neutral`: top of `linear-gradient` now `rgba(0→0.72)` so the
-    `library-wash` backdrop bleeds through the hero zone
-- **Saved (`.folio-private-desk`) NOT changed:** Saved uses `atelier-wash` (dark
-  cinema) as its backdrop role but renders as a light paper world. Making the dark
-  backdrop bleed through the light desk is wrong; the backdrop-role assignment for
-  Saved should be revisited separately.
+**Changes made (v3):**
+- **`backgrounds.ts`:** `auth-hero` warm-ink base + warm radials. `atelier-wash` 52% brass bloom + 26% terracotta + 32% amber uplighting, 8px blur, warmer base `#120e08`.
+- **`globals.css`:** Warm vignette token. Marine-ink shell radial removed. `folio-cinema-shell` now has 28%/16%/22% warm radials. `folio-cinema-panel` vignette warmed. v2 room-canvas transparency fixes preserved.
+- **Tests:** 4 new tests added locking the warm palette (no cold-blue auth anchors, warm gold/amber present, warm vignette token).
 
-**Screenshots captured in this environment** (`docs/visual-proof/pr523/`):
-- `before-login-reference.png` / `after-login-desktop.png` / `after-login-mobile.png`
-- `before-library-wash.png` / `after-library-wash.png`
-- `before-desk-texture.png` / `after-desk-texture.png`
-- `after-signup-desktop.png`
+**Tests:** 28/28 `atmospheric-background-system-v1`; 50/50 Phase 8N; `tsc --noEmit` clean; zero new failures.
 
-**Tests:** 25/25 `atmospheric-background-system-v1`; 50/50 Phase 8N; 1 pre-existing
-failure (test #62, loading skeleton folio-paper-panel); zero new failures.
-`tsc --noEmit` clean.
+**Screenshots captured** (`docs/visual-proof/pr523/`):
+- `after-login-desktop-v2.png` — live Playwright 1440×900; warm amber-brown; no blue-gray
+- `after-login-mobile-v2.png` / `after-signup-desktop-v2.png` — live Playwright
+- `before-atelier-wash.png` / `after-atelier-wash.png` — gradient ref (distinct warm sources vs barely-visible glow)
+- `before-auth-hero-gradient.png` / `after-auth-hero-gradient.png` — gradient ref (cold vs warm base)
+- Library-wash + desk-texture before/after from v2 still valid (palette unchanged in v3)
 
 ---
 

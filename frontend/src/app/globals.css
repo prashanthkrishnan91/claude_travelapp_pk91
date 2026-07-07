@@ -16,7 +16,7 @@
   /* Paper/linen noise-like texture overlay — warm off-white on dark */
   --ds-atelier-texture-tint: rgba(240, 225, 195, 0.028);
   /* Vignette gradient — soft darkening toward edges */
-  --ds-atelier-vignette:    rgba(6, 9, 14, 0.55);
+  --ds-atelier-vignette:    rgba(10, 6, 3, 0.55);
   /* Edge glow — warm brass rim light for surface depth */
   --ds-atelier-edge-glow:   rgba(197, 148, 77, 0.06);
   /* Surface inner highlight — hairline top-edge brightening */
@@ -1014,10 +1014,10 @@
     position: relative;
     background-color: var(--ds-warm-paper);
     background-image:
-      radial-gradient(ellipse 90% 42% at 50% -6%, rgba(197, 148, 77, 0.07) 0%, transparent 64%),
-      radial-gradient(ellipse 70% 50% at 88% 2%, rgba(110, 106, 74, 0.05) 0%, transparent 62%),
-      radial-gradient(ellipse 80% 40% at 50% -5%, rgba(31, 66, 86, 0.045) 0%, transparent 70%),
-      radial-gradient(ellipse 120% 60% at 50% 112%, rgba(203, 182, 143, 0.10) 0%, transparent 66%);
+      radial-gradient(ellipse 90% 42% at 50% -6%,  rgba(197, 148, 77, 0.10) 0%, transparent 64%),
+      radial-gradient(ellipse 70% 50% at 88%  2%,  rgba(181, 105, 75, 0.07) 0%, transparent 62%),
+      radial-gradient(ellipse 80% 40% at  8%  4%,  rgba(197, 148, 77, 0.06) 0%, transparent 68%),
+      radial-gradient(ellipse 120% 60% at 50% 112%, rgba(203, 182, 143, 0.12) 0%, transparent 66%);
   }
 
   /* ── Vignette layer
@@ -1836,7 +1836,7 @@
     background: radial-gradient(
       ellipse 100% 100% at 50% 50%,
       transparent 40%,
-      rgba(6, 9, 14, 0.45) 100%
+      rgba(10, 6, 3, 0.45) 100%
     );
     pointer-events: none;
     z-index: 0;
@@ -1909,11 +1909,9 @@
     position: relative;
     background-color: transparent;
     background-image:
-      radial-gradient(
-        ellipse 82% 44% at 50% -5%,
-        rgba(197, 148, 77, 0.14) 0%,
-        transparent 68%
-      );
+      radial-gradient(ellipse 90% 52% at 18% -8%,  rgba(197, 148, 77, 0.28) 0%, transparent 62%),
+      radial-gradient(ellipse 72% 44% at 88%  4%,  rgba(181, 105, 75, 0.16) 0%, transparent 58%),
+      radial-gradient(ellipse 80% 48% at 50% 108%, rgba(140,  88, 44, 0.22) 0%, transparent 55%);
   }
 
   /* folio-cinema-card: warm dark velvet card for cinema-world surfaces.

@@ -85,22 +85,22 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 38%",
     tone: "cinema",
-    // Cinematic golden-hour over calm water: the sky descends from deep night
-    // (#0a1018) through rich dusk-blue (#1a2b3c) into a luminous amber horizon
-    // (#c5944d → #e0b888). Two radial blooms push warm gold up from the bottom
-    // and cool marine down from the top to give the gradient clear directionality.
-    // Far stronger than the previous muted version — readable from across the room.
+    // Cinematic warm-dusk travel-film opening: deep warm ink descends into
+    // rich amber-bronze shadow, then opens into a luminous golden horizon
+    // (#c5944d → #e0b888). The base is entirely warm — no cold blues.
+    // Two amber blooms push warmth up from the horizon; a faint ink veil
+    // at the top gives depth without cooling the palette.
     placeholder: `
-      radial-gradient(150% 100% at 50% 125%, rgba(224,184,136,0.85) 0%, rgba(197,148,77,0.55) 28%, rgba(197,148,77,0) 58%),
-      radial-gradient(110% 75% at 14% -8%,  rgba(20,32,48,0.90)  0%, rgba(20,32,48,0)   52%),
-      radial-gradient( 90% 60% at 88%  4%,  rgba(44,58,79,0.55)  0%, rgba(44,58,79,0)   55%),
+      radial-gradient(160% 110% at 50% 130%, rgba(224,184,136,0.92) 0%, rgba(197,148,77,0.62) 30%, rgba(197,148,77,0) 58%),
+      radial-gradient( 80%  56% at 22%  0%,  rgba(16,10,4,0.70)     0%, rgba(16,10,4,0)      48%),
+      radial-gradient( 60%  44% at 82%  2%,  rgba(26,16,6,0.45)     0%, rgba(26,16,6,0)      50%),
       linear-gradient(185deg,
-        #080e16 0%,
-        #0e1c2e 18%,
-        #1a2b3c 34%,
-        #2c3a4f 48%,
-        #4a3e2a 64%,
-        #8a6230 80%,
+        #0c0906 0%,
+        #1a1208 18%,
+        #2e1e0c 34%,
+        #4a3218 48%,
+        #6a4c22 64%,
+        #9a7238 80%,
         #c5944d 92%,
         #e0b888 100%)
     `,
@@ -123,23 +123,26 @@ export const BACKDROP_REGISTRY: Record<BackdropRole, BackdropAsset> = {
     mobileImage: null,
     focalPoint: "50% 42%",
     tone: "cinema",
-    // Immersive warm atelier — the boutique lobby at golden hour. A strong
-    // brass bloom (32%) at the upper-left reads as a window of warm light;
-    // a terracotta accent (18%) at the lower-right grounds the room. The base
-    // is warm near-black (#0e0b08) so surfaces set against it feel luxurious.
+    // Private travel atelier — the boutique salon at golden hour.
+    // Stronger brass bloom (52%) at upper-left: a warm amber window of light
+    // from outside. Terracotta at lower-right (26%) warms the far wall.
+    // Central amber uplighting (32%) lifts the floor. Base is warm near-black
+    // (#120e08), warm-tinted so the room never reads as cold charcoal.
+    // Blur reduced (8px) so the blooms read as distinct warm sources, not haze.
     placeholder: `
-      radial-gradient(85% 58% at 22% -6%, rgba(197,148,77,0.32) 0%, rgba(197,148,77,0) 56%),
-      radial-gradient(72% 62% at 94%  8%, rgba(181,105,75,0.18) 0%, rgba(181,105,75,0) 58%),
-      radial-gradient(60% 50% at 50% 105%, rgba(140,88,44,0.22) 0%, rgba(140,88,44,0) 55%),
-      linear-gradient(180deg, #0a0806 0%, #0e0b08 38%, #141008 70%, #1a1410 100%)
+      radial-gradient(88% 60% at 18% -4%, rgba(197,148,77,0.52) 0%, rgba(197,148,77,0) 55%),
+      radial-gradient(68% 56% at 92%  6%, rgba(181,105,75,0.26) 0%, rgba(181,105,75,0) 54%),
+      radial-gradient(55% 48% at 50% 108%, rgba(160,108,54,0.32) 0%, rgba(160,108,54,0) 52%),
+      radial-gradient(40% 36% at 72% 78%, rgba(197,148,77,0.14) 0%, rgba(197,148,77,0) 58%),
+      linear-gradient(180deg, #120e08 0%, #160e08 32%, #1c1208 62%, #221610 100%)
     `,
     scrim: `
       linear-gradient(to bottom,
-        rgba(8,7,5,0.35) 0%,
-        rgba(8,7,5,0.10) 42%,
-        rgba(8,7,5,0.38) 100%)
+        rgba(10,7,4,0.30) 0%,
+        rgba(10,7,4,0.06) 40%,
+        rgba(10,7,4,0.32) 100%)
     `,
-    blurPx: 14,
+    blurPx: 8,
     grain: true,
     brief:
       "Concierge / Explore / Saved immersive mood. Boutique-lobby at golden hour, blurred and atmospheric.",
