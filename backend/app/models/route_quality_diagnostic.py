@@ -8,7 +8,7 @@ provider calls, and no itinerary writes happen anywhere in this PR.
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,11 @@ ELIGIBLE_ITEM_TYPES = frozenset({"activity", "meal"})
 # Fewer than this many *located* eligible stops means a future AI pass must
 # not reason about this day's route quality.
 MIN_LOCATED_STOPS_FOR_AI = 2
+
+# Documented, closed vocabulary — a future PR B consumer must not depend on
+# an undocumented status string.
+DiagnosticStatus = Literal["ready", "insufficient_stops", "missing_coordinates", "disabled"]
+RouteDataStatus = Literal["unavailable"]
 
 
 class DiagnosticStopSummary(BaseModel):
@@ -61,14 +66,14 @@ class RouteQualityDiagnosticResponse(BaseModel):
     on this response.
     """
 
-    status: str
+    status: DiagnosticStatus
     eligible_stop_count: int
     located_stop_count: int
     missing_coordinate_count: int
     eligible_stops: List[DiagnosticStopSummary] = Field(default_factory=list)
     missing_coordinate_stops: List[DiagnosticStopSummary] = Field(default_factory=list)
     excluded_stops: List[ExcludedStopSummary] = Field(default_factory=list)
-    route_data_status: str = "unavailable"
+    route_data_status: RouteDataStatus = "unavailable"
     warnings: List[str] = Field(default_factory=list)
     safe_for_ai: bool
     ai_blockers: List[str] = Field(default_factory=list)

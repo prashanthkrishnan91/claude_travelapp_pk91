@@ -13,12 +13,16 @@ Proves:
 - No provider call is made (no Google Routes / adapter symbols reachable).
 - No itinerary write occurs (source contains no insert/update/delete calls).
 - Current manual order (item.position) is preserved, never resequenced.
-- Invalid/non-numeric coordinates are treated as missing, never fabricated.
+- Invalid/non-numeric/out-of-range/NaN/inf coordinates are treated as
+  missing, never fabricated.
+- A day that exists but belongs to a different trip than the URL's trip_id
+  is rejected (404), never silently diagnosed under the wrong trip.
 - The response never carries a duration/distance figure.
 """
 from __future__ import annotations
 
 import inspect
+import math
 import sys
 import types
 from types import SimpleNamespace
@@ -26,6 +30,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
 import app.services.route_quality_diagnostic as svc
 
@@ -57,6 +62,47 @@ class _FakeItineraryService:
     def list_items(self, day_id, user_id=None):
         _FakeItineraryService.calls.append((day_id, user_id))
         return _FakeItineraryService.items
+
+
+class _FakeResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeQuery:
+    """Minimal chainable stand-in for the Supabase query builder."""
+
+    def __init__(self, rows):
+        self._rows = list(rows)
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, field, value):
+        self._rows = [r for r in self._rows if str(r.get(field)) == str(value)]
+        return self
+
+    def limit(self, n):
+        self._rows = self._rows[:n]
+        return self
+
+    def execute(self):
+        return _FakeResult(self._rows)
+
+
+class _FakeDB:
+    """Minimal stand-in for the Supabase client covering trips/itinerary_days."""
+
+    def __init__(self, trips=(), days=()):
+        self._trips = list(trips)
+        self._days = list(days)
+
+    def table(self, name):
+        if name == "trips":
+            return _FakeQuery(self._trips)
+        if name == "itinerary_days":
+            return _FakeQuery(self._days)
+        raise AssertionError(f"unexpected table: {name}")
 
 
 def _patch_itinerary_service(monkeypatch, items):
@@ -195,6 +241,36 @@ class TestMissingCoordinates:
         assert resp.missing_coordinate_stops[0].lat is None
         assert resp.missing_coordinate_stops[0].lng is None
 
+    @pytest.mark.parametrize(
+        "bad_lat,bad_lng,expect_lat_none,expect_lng_none",
+        [
+            (91.0, -80.1, True, False),  # latitude out of range
+            (25.1, 181.0, False, True),  # longitude out of range
+            (math.nan, -80.1, True, False),
+            (25.1, math.nan, False, True),
+            (math.inf, -80.1, True, False),
+            (25.1, -math.inf, False, True),
+        ],
+    )
+    def test_out_of_range_and_non_finite_coordinates_rejected(
+        self, monkeypatch, bad_lat, bad_lng, expect_lat_none, expect_lng_none
+    ):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        items = [
+            _item(uuid4(), "Museum", "activity", 0, {"lat": 25.1, "lng": -80.1}),
+            _item(uuid4(), "Bad Coords", "activity", 1, {"lat": bad_lat, "lng": bad_lng}),
+        ]
+        _patch_itinerary_service(monkeypatch, items)
+        resp = svc.compute_route_quality_diagnostic(uuid4(), uuid4(), uuid4(), db=MagicMock())
+        # An out-of-range/non-finite axis makes the whole pair count as
+        # missing — the diagnostic must never treat a bad coordinate as
+        # located just because its sibling axis happened to be valid.
+        assert resp.status == "missing_coordinates"
+        assert resp.missing_coordinate_count == 1
+        bad_stop = resp.missing_coordinate_stops[0]
+        assert (bad_stop.lat is None) == expect_lat_none
+        assert (bad_stop.lng is None) == expect_lng_none
+
 
 # ── excluded stops ────────────────────────────────────────────────────────────
 
@@ -217,6 +293,56 @@ class TestExcludedStops:
         for excluded in resp.excluded_stops:
             assert excluded.reason
             assert "activity and meal" in excluded.reason
+
+
+# ── trip/day ownership binding ───────────────────────────────────────────────
+
+
+class TestTripDayOwnershipBinding:
+    def test_day_belonging_to_a_different_trip_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id = uuid4()
+        owned_trip_id = uuid4()
+        other_trip_id = uuid4()
+        day_id = uuid4()
+        db = _FakeDB(
+            trips=[{"id": str(owned_trip_id), "user_id": str(user_id)}],
+            # The day exists, but belongs to a different trip than the URL's trip_id.
+            days=[{"id": str(day_id), "trip_id": str(other_trip_id)}],
+        )
+        _patch_itinerary_service(monkeypatch, [])
+        with pytest.raises(HTTPException):
+            svc.compute_route_quality_diagnostic(owned_trip_id, day_id, user_id, db=db)
+        # No items were read once the trip/day binding failed.
+        assert _FakeItineraryService.calls == []
+
+    def test_trip_not_owned_by_user_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id = uuid4()
+        trip_id = uuid4()
+        day_id = uuid4()
+        db = _FakeDB(trips=[], days=[{"id": str(day_id), "trip_id": str(trip_id)}])
+        _patch_itinerary_service(monkeypatch, [])
+        with pytest.raises(HTTPException):
+            svc.compute_route_quality_diagnostic(trip_id, day_id, user_id, db=db)
+        assert _FakeItineraryService.calls == []
+
+    def test_matching_trip_and_day_succeeds(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id = uuid4()
+        trip_id = uuid4()
+        day_id = uuid4()
+        db = _FakeDB(
+            trips=[{"id": str(trip_id), "user_id": str(user_id)}],
+            days=[{"id": str(day_id), "trip_id": str(trip_id)}],
+        )
+        items = [
+            _item(uuid4(), "Museum", "activity", 0, {"lat": 25.1, "lng": -80.1}),
+            _item(uuid4(), "Lunch", "meal", 1, {"lat": 25.2, "lng": -80.2}),
+        ]
+        _patch_itinerary_service(monkeypatch, items)
+        resp = svc.compute_route_quality_diagnostic(trip_id, day_id, user_id, db=db)
+        assert resp.status == "ready"
 
 
 # ── honest route data / no fabrication ───────────────────────────────────────
