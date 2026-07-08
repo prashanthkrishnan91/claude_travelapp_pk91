@@ -11,6 +11,12 @@ has now made day-level coordinate coverage honest and observable, which makes it
 tempting to jump straight to "Optimize Day." This document deliberately slows
 that down and fixes the contract first.
 
+> **Related ADR:** the *AI advisor layer* on top of this travel-time foundation
+> is governed separately by `docs/ai/AI_ROUTE_PLANNING_V1_ADR.md` (AI Route
+> Planning v1 — read-only, explain-first, no auto-reorder, no fabricated times).
+> This document owns the provider / travel-time contract; that one owns how AI is
+> allowed to talk about and propose changes to a day's route.
+
 ## Context — what already shipped (the route-readiness chain)
 
 These are display/data-correctness changes only. **None of them call a routing

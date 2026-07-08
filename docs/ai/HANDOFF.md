@@ -1,8 +1,34 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-07 (Atmospheric Background System v1 — warm palette v3 patch, PR #523)
+Last updated: 2026-07-08 (AI Route Planning v1 ADR — docs-only, this branch)
 
-### Atmospheric Background System v1 — warm palette v3 (this branch)
+### AI Route Planning v1 ADR (docs-only — this branch)
+
+Decision-only product + technical contract for the **AI advisor layer** on top
+of the closed Route Planning v1 foundation (Google Routes backend, inline
+connectors as canonical route UI, PR #521 Saved Items metadata parity).
+New doc: `docs/ai/AI_ROUTE_PLANNING_V1_ADR.md`; cross-linked from
+`ROUTE_PLANNING_V1_CONTRACT.md`.
+
+**Recommendation: PROCEED as a read-only, explain-first advisor — never an
+editor.** AI reads a single day's eligible (`activity`/`meal`) stops with
+canonical `lat`/`lng` + `category` and the *already-computed* route/connector
+data, and returns plain-English route-quality assessments + non-binding
+suggestions ("this day backtracks", "consider moving X before Y", "this stop has
+missing coordinates"). Hard boundaries fixed by the ADR: **no auto-reorder, no
+itinerary mutation without an explicit user approval action (with before/after
+preview in a later slice), no fabricated travel times/distances, only eligible
+items with canonical coordinates, honest missing-coordinate handling, flights/
+hotels are not route stops, inline connectors stay canonical, no new provider or
+new Google Routes call site.** Includes product/UX/data/provider/AI/UI/approval
+contracts, an explicit **Not v1** list, a future 3-PR sequence (A: route-quality
+diagnostic contract, flag-gated → B: read-only frontend insight surface → C:
+explicit user-approved reorder with before/after), and merge gates (tests,
+visual proof, provider evidence, no-mutation-without-approval, no-fake-times).
+**No production code, package, env, SQL, provider, or UI changes.** Atmosphere
+work untouched.
+
+### Atmospheric Background System v1 — warm palette v3 (merged, PR #523/#524)
 
 Third iteration. User feedback on v2: "reads as beige → blue-gray" — visible retint
 but in the wrong direction (cooler/blue-gray shell, mostly-black salon).
