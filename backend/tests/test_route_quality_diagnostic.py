@@ -241,6 +241,21 @@ class TestMissingCoordinates:
         assert resp.missing_coordinate_stops[0].lat is None
         assert resp.missing_coordinate_stops[0].lng is None
 
+    def test_boolean_coordinates_remain_rejected(self, monkeypatch):
+        # bool is a subclass of int in Python — must not be mistaken for a
+        # valid numeric coordinate (True/False are not lat/lng values).
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        items = [
+            _item(uuid4(), "Museum", "activity", 0, {"lat": 25.1, "lng": -80.1}),
+            _item(uuid4(), "Bad Coords", "activity", 1, {"lat": True, "lng": False}),
+        ]
+        _patch_itinerary_service(monkeypatch, items)
+        resp = svc.compute_route_quality_diagnostic(uuid4(), uuid4(), uuid4(), db=MagicMock())
+        assert resp.status == "missing_coordinates"
+        assert resp.missing_coordinate_count == 1
+        assert resp.missing_coordinate_stops[0].lat is None
+        assert resp.missing_coordinate_stops[0].lng is None
+
     @pytest.mark.parametrize(
         "bad_lat,bad_lng,expect_lat_none,expect_lng_none",
         [

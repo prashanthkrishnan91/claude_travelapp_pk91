@@ -44,7 +44,7 @@ validation accepted any int/float including `NaN`/`inf`/out-of-range; fixed by
 rejecting non-finite and out-of-range values per axis. Both are covered by new
 tests (mismatch → 404, `NaN`/`inf`/out-of-range → missing).
 
-**Tests:** `backend/tests/test_route_quality_diagnostic.py` (25 tests) —
+**Tests:** `backend/tests/test_route_quality_diagnostic.py` (26 tests) —
 disabled-flag (no `ItineraryService` import touched), 0/1 eligible stop,
 2+ located → ready/safe, missing-coordinate → honest/unsafe, flight/hotel/note
 exclusion, manual-order preservation, invalid/out-of-range/non-finite
@@ -53,8 +53,8 @@ trip → 404, matching pair succeeds), and source-scan guards proving no
 provider/LLM/write symbols exist in the service. The `ItineraryService` import
 is lazy (deferred past the flag check) purely so the disabled-path and
 pure-logic tests can run without the full supabase/`app.models` stack in this
-sandbox; production behavior is unchanged. 25/25 pass locally; sibling
-`route_estimate`/registry/adapter suites (84 tests together) unaffected.
+sandbox; production behavior is unchanged. 26/26 pass locally; sibling
+`route_estimate`/registry/adapter suites (158 tests together) unaffected.
 
 **Next (not this PR):** PR B — read-only frontend insight surface rendering
 this diagnostic in plain English, still no reorder/write. PR C — explicit
