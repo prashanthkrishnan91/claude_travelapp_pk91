@@ -305,11 +305,15 @@ Future recommendations only — **not authorized by this ADR**. Each is an
 independent capability slice with its own readiness gate; do not collapse them.
 
 1. **PR A — Route-quality diagnostic contract (backend/contract, flag-gated).**
-   A read-only, flag-gated route-quality/day-flow diagnostic derived from the
-   existing eligible stops + existing route data (e.g. a backtracking/coverage
-   summary shape). No new provider call, no new Google Routes call site, no
-   itinerary write. Tests: contract + eligibility + missing-coordinate + "no
-   fabricated figures" assertions.
+   **Status: implemented, flag-gated default off** (this branch/PR). A
+   read-only `GET /itinerary/{trip_id}/days/{day_id}/route-quality-diagnostic`
+   derived from the day's already-persisted eligible stops (no client-supplied
+   payload). No new provider call, no new Google Routes call site, no
+   itinerary write, no LLM call. `route_data_status` is honestly
+   `"unavailable"` in this slice — no route/connector figure is fetched or
+   persisted server-side. Tests: contract + eligibility + missing-coordinate +
+   "no fabricated figures" assertions (16 tests,
+   `backend/tests/test_route_quality_diagnostic.py`).
 
 2. **PR B — Read-only route-insight surface (frontend), using existing inline
    connectors.** A lightweight, user-triggered insight affordance adjacent to the

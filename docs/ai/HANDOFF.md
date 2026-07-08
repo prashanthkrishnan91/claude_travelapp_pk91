@@ -1,8 +1,51 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-08 (AI Route Planning v1 ADR — docs-only, this branch)
+Last updated: 2026-07-08 (AI Route Planning v1 — PR A, this branch)
 
-### AI Route Planning v1 ADR (docs-only — this branch)
+### AI Route Planning v1 — PR A: route-quality diagnostic (backend, flag-gated, this branch)
+
+Read-only, deterministic diagnostic substrate for a future AI advisor, per
+`AI_ROUTE_PLANNING_V1_ADR.md` Section 9 (PR A of the 3-PR sequence). **No LLM
+call, no AI text generation, no frontend, no itinerary write, no auto-reorder,
+no new provider, no new Google Routes call site, no SQL.**
+
+New: `app/models/route_quality_diagnostic.py` (`RouteQualityDiagnosticResponse`,
+`DiagnosticStopSummary`, `ExcludedStopSummary`), `app/services/route_quality_diagnostic.py`
+(`compute_route_quality_diagnostic`), `app/routes/route_quality_diagnostic.py`
+(`GET /itinerary/{trip_id}/days/{day_id}/route-quality-diagnostic`). New flag
+`route_quality_diagnostic_v1_enabled` (default `False`) in `core/config.py`.
+
+The service reads the day's **already-persisted** itinerary items via the
+existing `ItineraryService.list_items` (day-ownership verified, same pattern
+as `route_estimate.py`) — it does not accept a client-supplied stop payload.
+Only `activity`/`meal` items are eligible (flights/hotels/notes excluded with
+a reason). Coordinates are read via a Python port of the frontend
+`readCanonicalLat`/`readCanonicalLng` contract (camelCase-first, snake_case
+and nested-shape fallback) — never geocoded, never fabricated; a stop missing
+coordinates is named in `missing_coordinate_stops`, never dropped. Manual
+`position` order is preserved as returned by the existing read path.
+`route_data_status` is always `"unavailable"` in this PR — no route/connector
+figure is persisted server-side today, so this is the honest answer, not a
+fetch. `status`: `ready | insufficient_stops | missing_coordinates | disabled`.
+`safe_for_ai` is `true` only when status is `ready` (≥2 eligible stops, all
+located); otherwise `ai_blockers` names why.
+
+**Tests:** `backend/tests/test_route_quality_diagnostic.py` (16 tests) —
+disabled-flag (no `ItineraryService` import touched), 0/1 eligible stop,
+2+ located → ready/safe, missing-coordinate → honest/unsafe, flight/hotel/note
+exclusion, manual-order preservation, invalid-coordinate rejection, and
+source-scan guards proving no provider/LLM/write symbols exist in the service.
+The `ItineraryService` import is lazy (deferred past the flag check) purely so
+the disabled-path and pure-logic tests can run without the full
+supabase/`app.models` stack in this sandbox; production behavior is
+unchanged. 16/16 pass locally; sibling `route_estimate`/registry/adapter
+suites (148 tests) unaffected.
+
+**Next (not this PR):** PR B — read-only frontend insight surface rendering
+this diagnostic in plain English, still no reorder/write. PR C — explicit
+user-approved reorder-proposal contract (still no auto-apply).
+
+### AI Route Planning v1 ADR (docs-only, merged)
 
 Decision-only product + technical contract for the **AI advisor layer** on top
 of the closed Route Planning v1 foundation (Google Routes backend, inline
