@@ -7,12 +7,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
-import { ItineraryDay, ItineraryItem, RouteEstimateLeg } from "@/types";
+import { ExcludedStopSummary, ItineraryDay, ItineraryItem, RouteEstimateLeg, RouteQualityDiagnosticResponse } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, computeRouteReadiness, getRouteableStopsForEstimate, summarizeHints } from "@/lib/travelHints";
-import { callRouteEstimate, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
+import { callRouteEstimate, fetchRouteQualityDiagnostic, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
 
@@ -400,6 +400,101 @@ function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
         {status.withCoords} of {status.total} stops have location data.{" "}
         <span className="opacity-70">Add locations before route planning.</span>
       </span>
+    </div>
+  );
+}
+
+// ─── RouteQualityDiagnosticNote ───────────────────────────────────────────────
+// Read-only route-readiness affordance (PR #526 diagnostic). Fetches only on
+// explicit click — never on render, day switch, or itinerary refresh. Renders
+// deterministic, honest copy; makes no LLM/route-estimate/mutation calls.
+
+function describeExcludedStops(excludedStops: ExcludedStopSummary[]): string | null {
+  if (!excludedStops || excludedStops.length === 0) return null;
+  const label = (itemType: string) =>
+    itemType === "flight" ? "Flights" : itemType === "hotel" ? "Hotels" : `${itemType}s`;
+  const labels = [...new Set(excludedStops.map((s) => s.itemType))].map(label);
+  const joined =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+  return `${joined} excluded from route planning v1.`;
+}
+
+function describeRouteQualityDiagnostic(diagnostic: RouteQualityDiagnosticResponse): string[] {
+  const lines: string[] = [];
+  if (diagnostic.status === "disabled") {
+    lines.push("Route readiness review isn't turned on for this trip yet.");
+  } else if (diagnostic.status === "insufficient_stops") {
+    const count = diagnostic.eligibleStopCount;
+    lines.push(
+      `Only ${count} eligible stop${count === 1 ? "" : "s"} found. Add more stops with locations to review route order.`
+    );
+  } else if (diagnostic.status === "missing_coordinates") {
+    lines.push(
+      `${diagnostic.locatedStopCount} of ${diagnostic.eligibleStopCount} stops have location data. Add locations before route planning.`
+    );
+    lines.push("No route travel-time data is available yet; no travel times are estimated here.");
+  } else if (diagnostic.status === "ready") {
+    lines.push("This day is ready for route review.");
+    lines.push("No route travel-time data is available yet; no travel times are estimated here.");
+  }
+  const excludedNote = describeExcludedStops(diagnostic.excludedStops);
+  if (excludedNote) lines.push(excludedNote);
+  return lines;
+}
+
+function RouteQualityDiagnosticNote({ tripId, dayId }: { tripId: string; dayId: string }) {
+  const [diagnostic, setDiagnostic] = useState<RouteQualityDiagnosticResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  const handleCheck = async () => {
+    setLoading(true);
+    setErrored(false);
+    try {
+      const result = await fetchRouteQualityDiagnostic(tripId, dayId);
+      setDiagnostic(result);
+    } catch {
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!diagnostic) {
+    return (
+      <div className="mt-1" data-testid="route-quality-diagnostic">
+        <button
+          type="button"
+          onClick={handleCheck}
+          disabled={loading}
+          data-testid="route-quality-diagnostic-btn"
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[36px]"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Info className="w-3 h-3" />}
+          Check route readiness
+        </button>
+        {errored && (
+          <p className="text-[10px] text-ds-folio-ink-mist mt-1">
+            Route readiness check didn&apos;t load. Try again.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="route-quality-diagnostic-result"
+      className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+    >
+      <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
+      <div className="text-[10px] text-ds-folio-ink-mist leading-tight space-y-0.5">
+        {describeRouteQualityDiagnostic(diagnostic).map((line, i) => (
+          <p key={i}>{line}</p>
+        ))}
+      </div>
     </div>
   );
 }
@@ -869,6 +964,7 @@ export function ItineraryDayColumn({
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
+          <RouteQualityDiagnosticNote tripId={day.tripId} dayId={day.id} />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (

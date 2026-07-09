@@ -139,6 +139,45 @@ export interface RouteEstimateResponse {
   metadata: Record<string, unknown>;
 }
 
+// ─── Route Quality Diagnostic (read-only, PR #526) ───────────────────────────
+
+export type RouteQualityDiagnosticStatus =
+  | "ready"
+  | "insufficient_stops"
+  | "missing_coordinates"
+  | "disabled";
+
+export interface DiagnosticStopSummary {
+  itemId: string;
+  title: string;
+  itemType: string;
+  position: number;
+  lat?: number;
+  lng?: number;
+  category?: string;
+}
+
+export interface ExcludedStopSummary {
+  itemId: string;
+  title: string;
+  itemType: string;
+  reason: string;
+}
+
+export interface RouteQualityDiagnosticResponse {
+  status: RouteQualityDiagnosticStatus;
+  eligibleStopCount: number;
+  locatedStopCount: number;
+  missingCoordinateCount: number;
+  eligibleStops: DiagnosticStopSummary[];
+  missingCoordinateStops: DiagnosticStopSummary[];
+  excludedStops: ExcludedStopSummary[];
+  routeDataStatus: "unavailable";
+  warnings: string[];
+  safeForAi: boolean;
+  aiBlockers: string[];
+}
+
 // ─── Travel Card ─────────────────────────────────────────────────────────────
 
 export interface TravelCard {
