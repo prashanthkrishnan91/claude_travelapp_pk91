@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     # gates whether the diagnostic is computed at all.
     route_quality_diagnostic_v1_enabled: bool = False
 
+    # AI Route Planning v1 — PR C: explicit user-approved reorder-proposal
+    # apply contract. Default False. Rollback: set
+    # ROUTE_REORDER_PROPOSAL_V1_ENABLED=false or omit.
+    # No LLM call, no AI-generated suggestion, no auto-reorder. Writes only
+    # the exact order the caller confirmed, only after ownership + item-set +
+    # stale-order validation, only via the existing itinerary item position
+    # field.
+    route_reorder_proposal_v1_enabled: bool = False
+
     # Cost-control guardrails for expensive AI/search routes
     guardrail_ai_concierge_requests: int = 6
     guardrail_ai_concierge_window_seconds: int = 60

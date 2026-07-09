@@ -178,6 +178,25 @@ export interface RouteQualityDiagnosticResponse {
   aiBlockers: string[];
 }
 
+// ─── Reorder Proposal (explicit user-confirmed apply, PR C) ──────────────────
+// No AI/LLM generates this proposal in this PR — it is only the shape the
+// apply contract validates and writes on explicit user confirmation.
+
+export interface ReorderProposal {
+  currentOrder: string[];
+  proposedOrder: string[];
+}
+
+export type RouteReorderApplyStatus = "disabled" | "rejected" | "applied";
+
+export interface RouteReorderApplyResponse {
+  status: RouteReorderApplyStatus;
+  reason: string;
+  message: string;
+  dayId: string;
+  order: string[];
+}
+
 // ─── Travel Card ─────────────────────────────────────────────────────────────
 
 export interface TravelCard {
