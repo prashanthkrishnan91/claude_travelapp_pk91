@@ -24,6 +24,21 @@ persisted order (stale-preview detection). Only on every check passing does it
 write — and only the existing `ItineraryItem.position` field, via the
 existing `ItineraryService.update_item` ownership-checked path (no parallel
 data model), and only for items whose position actually changed.
+`RouteReorderApplyResponse.status` is a closed `Literal["disabled",
+"rejected", "applied"]`, not a plain `str`.
+
+**Post-open-PR audit patch (same PR):** a reviewer found a partial-write risk
+— the write loop applies positions via multiple sequential `update_item`
+calls (no atomic/batch position-write primitive exists in this repo — same
+one-PATCH-per-item pattern as the existing drag-and-drop reorder), so a
+mid-sequence failure could leave a day partially reordered. Fixed with
+application-level rollback (no SQL/RPC added): every applied position change
+is tracked, and if any write raises, every already-applied item is rolled
+back (best-effort, reverse order) before a fail-closed `HTTPException(502)`
+is raised — the caller can never receive `status="applied"` for a
+partially-written day. A rollback write that itself fails is logged and
+skipped (never silently swallowed into a false success). Covered by 3 new
+tests simulating a mid-apply failure after one successful write.
 
 Frontend: `applyRouteReorderProposal(...)` in `api.ts` (POST only, to the
 apply endpoint) and a new `ReorderProposalPreview` component in
@@ -37,14 +52,17 @@ in the running app with a hardcoded `proposal={null}`, so it never renders
 today; it exists as a reusable, fully-tested component for a later PR to wire
 to a real (still-gated) proposal source.
 
-**Tests:** `backend/tests/test_route_reorder_proposal.py` (15 tests) —
+**Tests:** `backend/tests/test_route_reorder_proposal.py` (18 tests) —
 disabled flag, ownership (cross-trip day, unowned trip), item-set validation
 (missing/extra/duplicate/cross-day item), stale-`current_order` rejection,
 successful apply (writes only changed positions, preserves item set exactly,
-only reachable via explicit call), no LLM/provider symbols in source. 15/15
-pass (41/41 alongside PR A's suite). `frontend/tests/reorder-proposal-apply.test.mjs`
-(21 tests) — apply helper POST-only/correct endpoint, preview shows both
-orders, cancel never calls apply, confirm is the only apply call site and is
+only reachable via explicit call), **mid-apply failure rolls back
+already-applied items to their original positions and raises (never returns
+`status="applied"`), and a failing rollback write is logged and still fails
+closed**, no LLM/provider symbols in source. 18/18 pass (44/44 alongside PR
+A's suite). `frontend/tests/reorder-proposal-apply.test.mjs` (21 tests) —
+apply helper POST-only/correct endpoint, preview shows both orders, cancel
+never calls apply, confirm is the only apply call site and is
 double-submit-guarded, no auto-call in a `useEffect`, no LLM/route-estimate
 call, `CheckRoutePanel` not resurrected, no "Optimize Day"/auto-reorder copy,
 types exported. 21/21 pass; full frontend suite 3915/3929 (same 14
@@ -58,11 +76,13 @@ pre-existing, unrelated backend test-collection error
 is always `null`), so there is no live in-app screenshot to take. Verified
 instead via a temporary local-only harness (component + fixture proposal
 mounted at an `/auth/*`-prefixed route to bypass the auth redirect, Next dev
-server, Playwright) — not committed. Screenshots: before/after preview,
-fail-closed error state after confirm (no live backend/DB in this sandbox to
-demonstrate a real "applied" success write — proven instead by the 15 backend
-contract tests), cancel → no-change, and a 375px mobile viewport. All states
-used the real component and real design tokens, not a synthetic mockup.
+server, Playwright) — not committed; the resulting screenshots **are**
+committed at `docs/visual-proof/pr528/` (before/after preview, fail-closed
+error state after confirm — no live backend/DB in this sandbox to demonstrate
+a real "applied" success write, proven instead by the 18 backend contract
+tests — cancel → no-change, and a 375px mobile viewport). All states used the
+real component and real design tokens, not a synthetic mockup; the README in
+that folder labels the harness/inert-component caveat explicitly.
 
 **Next (not this PR):** AI Route Planning v1's 3-PR sequence is complete
 (A: diagnostic, B: read-only insight surface, C: this apply contract). A

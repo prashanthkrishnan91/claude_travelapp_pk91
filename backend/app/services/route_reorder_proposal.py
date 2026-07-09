@@ -20,10 +20,20 @@ Hard safety guarantees enforced here:
 - Only the existing ``position`` field is written, via the existing
   ``ItineraryService.update_item`` ownership-checked path. No new table,
   no new column, no parallel data model.
+- No partial write on failure: the repo has no atomic/batch position-write
+  primitive (``ItineraryService`` only exposes per-item ``update_item``, and
+  the existing drag-and-drop reorder in ``TripBuilder.tsx`` already applies
+  the same pattern — one PATCH per changed item). Adding one would mean a
+  new SQL/RPC surface, which this PR does not introduce. Instead, each
+  applied position change is tracked; if any write in the sequence raises,
+  every already-applied item is rolled back (best-effort, in reverse order)
+  to its original position before a fail-closed error is raised — the
+  caller never receives ``status="applied"`` for a partially-written day.
 """
 from __future__ import annotations
 
-from typing import Any, List
+import logging
+from typing import Any, List, Tuple
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -33,6 +43,8 @@ from app.models.route_reorder_proposal import (
     RouteReorderApplyRequest,
     RouteReorderApplyResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _verify_trip_ownership(db: Any, trip_id: UUID, user_id: UUID) -> None:
@@ -96,7 +108,10 @@ def apply_route_reorder_proposal(
 
     Validation order: feature flag, ownership (trip, then day belongs to
     that exact trip), item-set equality, stale-order check. Nothing is
-    written unless every check passes.
+    written on any validation failure. If a write fails partway through the
+    sequence of per-item updates, every already-applied item is rolled back
+    (best-effort) and an ``HTTPException(502)`` is raised — the caller can
+    never receive ``status="applied"`` for a partially-written day.
     """
     settings = get_settings()
 
@@ -148,14 +163,27 @@ def apply_route_reorder_proposal(
             ),
         )
 
-    for index, item_id in enumerate(payload.proposed_order):
-        if position_by_id.get(item_id) == index:
-            continue
-        itinerary.update_item(
-            UUID(item_id),
-            ItineraryItemUpdate(position=index),
-            user_id=user_id,
-        )
+    applied: List[Tuple[str, int]] = []  # (item_id, previous_position), in apply order
+    try:
+        for index, item_id in enumerate(payload.proposed_order):
+            previous_position = position_by_id.get(item_id)
+            if previous_position == index:
+                continue
+            itinerary.update_item(
+                UUID(item_id),
+                ItineraryItemUpdate(position=index),
+                user_id=user_id,
+            )
+            applied.append((item_id, previous_position))
+    except Exception as exc:
+        _rollback_positions(itinerary, applied, user_id)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "This order couldn't be applied. The day's order was restored "
+                "to what it was before — nothing changed."
+            ),
+        ) from exc
 
     return RouteReorderApplyResponse(
         status="applied",
@@ -164,3 +192,33 @@ def apply_route_reorder_proposal(
         day_id=str(day_id),
         order=list(payload.proposed_order),
     )
+
+
+def _rollback_positions(itinerary: Any, applied: List[Tuple[str, int]], user_id: UUID) -> None:
+    """Best-effort revert of every already-applied item to its original
+    position, in reverse apply order.
+
+    No SQL transaction backs this (no atomic/batch write primitive exists in
+    this repo — see module docstring): if a rollback write itself fails
+    (e.g. the same outage that caused the original failure), it is logged
+    and skipped rather than raised, so one failing rollback write cannot
+    mask the others. The caller always still raises the fail-closed error
+    regardless of rollback outcome — a day is never reported as
+    successfully applied when any write in the sequence failed.
+    """
+    from app.models.itinerary import ItineraryItemUpdate
+
+    for item_id, previous_position in reversed(applied):
+        try:
+            itinerary.update_item(
+                UUID(item_id),
+                ItineraryItemUpdate(position=previous_position),
+                user_id=user_id,
+            )
+        except Exception:
+            logger.error(
+                "route_reorder_proposal: rollback write failed for item %s; "
+                "day may be left partially reordered",
+                item_id,
+                exc_info=True,
+            )

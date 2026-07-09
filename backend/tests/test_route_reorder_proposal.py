@@ -45,10 +45,18 @@ def _item(item_id, position):
 
 
 class _FakeItineraryService:
-    """Stand-in for ItineraryService tracking list_items/update_item calls."""
+    """Stand-in for ItineraryService tracking list_items/update_item calls.
+
+    ``fail_on_calls`` is a set of 1-indexed ``update_item`` call numbers that
+    should raise, simulating a mid-apply write failure (e.g. a DB outage
+    partway through the sequence of per-item PATCHes) — and, when it
+    includes a call number that falls during rollback, a failing rollback
+    write too.
+    """
 
     calls = []
     updates = []
+    fail_on_calls = frozenset()
 
     def __init__(self, db):
         self.db = db
@@ -59,6 +67,9 @@ class _FakeItineraryService:
 
     def update_item(self, item_id, payload, user_id=None):
         _FakeItineraryService.updates.append((item_id, payload.position, user_id))
+        call_number = len(_FakeItineraryService.updates)
+        if call_number in _FakeItineraryService.fail_on_calls:
+            raise RuntimeError("simulated DB write failure")
         for item in _FakeItineraryService.items:
             if item.id == item_id:
                 item.position = payload.position
@@ -102,10 +113,11 @@ class _FakeDB:
         raise AssertionError(f"unexpected table: {name}")
 
 
-def _patch_itinerary_service(monkeypatch, items):
+def _patch_itinerary_service(monkeypatch, items, fail_on_calls=frozenset()):
     _FakeItineraryService.items = items
     _FakeItineraryService.calls = []
     _FakeItineraryService.updates = []
+    _FakeItineraryService.fail_on_calls = fail_on_calls
     fake_mod = types.ModuleType("app.services.itinerary")
     fake_mod.ItineraryService = _FakeItineraryService
     monkeypatch.setitem(sys.modules, "app.services.itinerary", fake_mod)
@@ -116,6 +128,23 @@ def _owned_db(user_id, trip_id, day_id):
         trips=[{"id": str(trip_id), "user_id": str(user_id)}],
         days=[{"id": str(day_id), "trip_id": str(trip_id)}],
     )
+
+
+class _StatusCodeHTTPException(Exception):
+    """Local stand-in for fastapi.HTTPException that actually carries
+    ``status_code``/``detail`` as instance attributes.
+
+    ``tests/conftest.py`` stubs ``fastapi.HTTPException`` with a no-op
+    ``__init__`` (for lightweight collection without the full fastapi
+    stack), so ``svc``'s module-level ``HTTPException`` name does not carry
+    a real ``status_code``. Tests that need to assert the actual status
+    code monkeypatch ``svc.HTTPException`` to this class instead.
+    """
+
+    def __init__(self, status_code: int = 400, detail=None):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
 
 
 # ── feature flag disabled (default) ──────────────────────────────────────────
@@ -358,6 +387,97 @@ class TestSuccessfulApply:
         _patch_itinerary_service(monkeypatch, [_item(a, 0), _item(b, 1)])
         RouteReorderApplyRequest(current_order=[str(a), str(b)], proposed_order=[str(b), str(a)])
         assert _FakeItineraryService.updates == []
+
+
+# ── partial-write / mid-apply failure ────────────────────────────────────────
+
+
+class TestPartialWriteRollback:
+    def test_mid_apply_failure_rolls_back_already_applied_items(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        monkeypatch.setattr(svc, "HTTPException", _StatusCodeHTTPException)
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b, c = uuid4(), uuid4(), uuid4()
+        # Full rotation: a(0)->1, b(1)->2, c(2)->0 — every item's write call
+        # fails on the 2nd update (the write for `a`), after `c`'s write
+        # already succeeded.
+        _patch_itinerary_service(
+            monkeypatch, [_item(a, 0), _item(b, 1), _item(c, 2)], fail_on_calls={2}
+        )
+        current = [str(a), str(b), str(c)]
+        proposed = [str(c), str(a), str(b)]
+        with pytest.raises(_StatusCodeHTTPException) as exc_info:
+            svc.apply_route_reorder_proposal(
+                trip_id,
+                day_id,
+                user_id,
+                RouteReorderApplyRequest(current_order=current, proposed_order=proposed),
+                db=db,
+            )
+        assert exc_info.value.status_code == 502
+
+        # Original positions are restored — no partial reorder survives.
+        positions = {item.id: item.position for item in _FakeItineraryService.items}
+        assert positions == {a: 0, b: 1, c: 2}
+
+        # Call 1 applied c->0; call 2 (a->1) raised; call 3 is the rollback
+        # of c back to its original position 2.
+        assert len(_FakeItineraryService.updates) == 3
+        assert _FakeItineraryService.updates[0] == (c, 0, user_id)
+        assert _FakeItineraryService.updates[1] == (a, 1, user_id)
+        assert _FakeItineraryService.updates[2] == (c, 2, user_id)
+
+    def test_no_success_response_returned_on_mid_apply_failure(self, monkeypatch):
+        # The function must never return a RouteReorderApplyResponse (with
+        # status="applied" or otherwise) when a write in the sequence
+        # failed — it must raise instead. pytest.raises below is itself the
+        # proof: if apply_route_reorder_proposal returned anything, this
+        # test would fail with "DID NOT RAISE".
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b = uuid4(), uuid4()
+        _patch_itinerary_service(monkeypatch, [_item(a, 0), _item(b, 1)], fail_on_calls={1})
+        current = [str(a), str(b)]
+        proposed = [str(b), str(a)]
+        with pytest.raises(HTTPException):
+            svc.apply_route_reorder_proposal(
+                trip_id,
+                day_id,
+                user_id,
+                RouteReorderApplyRequest(current_order=current, proposed_order=proposed),
+                db=db,
+            )
+
+    def test_rollback_write_failure_is_logged_and_still_fails_closed(self, monkeypatch):
+        # If the rollback write itself fails (e.g. the same outage that
+        # caused the original failure), the operation must still raise a
+        # fail-closed error rather than silently succeeding or hanging.
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b, c = uuid4(), uuid4(), uuid4()
+        # Call 2 (a's write) fails, triggering rollback of c (call 3), which
+        # also fails.
+        monkeypatch.setattr(svc, "HTTPException", _StatusCodeHTTPException)
+        _patch_itinerary_service(
+            monkeypatch, [_item(a, 0), _item(b, 1), _item(c, 2)], fail_on_calls={2, 3}
+        )
+        current = [str(a), str(b), str(c)]
+        proposed = [str(c), str(a), str(b)]
+        with pytest.raises(_StatusCodeHTTPException) as exc_info:
+            svc.apply_route_reorder_proposal(
+                trip_id,
+                day_id,
+                user_id,
+                RouteReorderApplyRequest(current_order=current, proposed_order=proposed),
+                db=db,
+            )
+        assert exc_info.value.status_code == 502
+        # Rollback was attempted (recorded) even though it failed.
+        assert len(_FakeItineraryService.updates) == 3
+        assert _FakeItineraryService.updates[2] == (c, 2, user_id)
 
 
 # ── no LLM / provider symbols ──────────────────────────────────────────────────

@@ -10,12 +10,14 @@ and the server verifies them before writing anything.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
 # Closed vocabulary — a consumer must not depend on an undocumented status.
-ReorderApplyStatus = str  # "disabled" | "rejected" | "applied"
+# A write failure mid-apply never surfaces here: it is fail-closed via a
+# raised HTTPException (with best-effort rollback), never a response status.
+ReorderApplyStatus = Literal["disabled", "rejected", "applied"]
 
 
 class RouteReorderApplyRequest(BaseModel):
@@ -39,7 +41,7 @@ class RouteReorderApplyResponse(BaseModel):
     unwritten (fail-closed) unless ``status == "applied"``.
     """
 
-    status: str
+    status: ReorderApplyStatus
     reason: str
     message: str
     day_id: str
