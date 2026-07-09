@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     # Server-side only; never exposed to the frontend. Used by google_routes_adapter.
     google_routes_api_key: str = ""
 
+    # AI Route Planning v1 — PR A: read-only route-quality diagnostic.
+    # Default False. Rollback: set ROUTE_QUALITY_DIAGNOSTIC_V1_ENABLED=false or omit.
+    # No LLM call, no provider call, no itinerary write on any path — flag only
+    # gates whether the diagnostic is computed at all.
+    route_quality_diagnostic_v1_enabled: bool = False
+
     # Cost-control guardrails for expensive AI/search routes
     guardrail_ai_concierge_requests: int = 6
     guardrail_ai_concierge_window_seconds: int = 60

@@ -1,8 +1,66 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-08 (AI Route Planning v1 ADR — docs-only, this branch)
+Last updated: 2026-07-08 (AI Route Planning v1 — PR A, this branch)
 
-### AI Route Planning v1 ADR (docs-only — this branch)
+### AI Route Planning v1 — PR A: route-quality diagnostic (backend, flag-gated, this branch)
+
+Read-only, deterministic diagnostic substrate for a future AI advisor, per
+`AI_ROUTE_PLANNING_V1_ADR.md` Section 9 (PR A of the 3-PR sequence). **No LLM
+call, no AI text generation, no frontend, no itinerary write, no auto-reorder,
+no new provider, no new Google Routes call site, no SQL.**
+
+New: `app/models/route_quality_diagnostic.py` (`RouteQualityDiagnosticResponse`,
+`DiagnosticStopSummary`, `ExcludedStopSummary`), `app/services/route_quality_diagnostic.py`
+(`compute_route_quality_diagnostic`), `app/routes/route_quality_diagnostic.py`
+(`GET /itinerary/{trip_id}/days/{day_id}/route-quality-diagnostic`). New flag
+`route_quality_diagnostic_v1_enabled` (default `False`) in `core/config.py`.
+
+The service reads the day's **already-persisted** itinerary items via the
+existing `ItineraryService.list_items` — it does not accept a client-supplied
+stop payload. Before any item is read, both the path `trip_id` (owned by the
+user) and the exact `day_id`-belongs-to-`trip_id` binding are verified (mirrors
+`route_estimate._verify_trip_ownership`/`_verify_day_ownership`) — a day that
+exists under a *different* trip than the URL's `trip_id` is rejected (404),
+never silently diagnosed. Only `activity`/`meal` items are eligible
+(flights/hotels/notes excluded with a reason). Coordinates are read via a
+Python port of the frontend `readCanonicalLat`/`readCanonicalLng` contract
+(camelCase-first, snake_case and nested-shape fallback) with strict validation:
+non-numeric, non-finite (`NaN`/`inf`), and out-of-range (`lat` outside
+`[-90,90]`, `lng` outside `[-180,180]`) values all count as missing, never
+located — never geocoded, never fabricated. A stop missing coordinates is
+named in `missing_coordinate_stops`, never dropped. Manual `position` order is
+preserved as returned by the existing read path. `route_data_status` is always
+`"unavailable"` in this PR (`Literal["unavailable"]`) — no route/connector
+figure is persisted server-side today, so this is the honest answer, not a
+fetch. `status` is a closed `Literal["ready","insufficient_stops","missing_coordinates","disabled"]`.
+`safe_for_ai` is `true` only when status is `ready` (≥2 eligible stops, all
+located); otherwise `ai_blockers` names why.
+
+**Post-open-PR audit patch (same PR):** a reviewer found two merge blockers —
+(1) `trip_id` was accepted in the path but never bound to `day_id`, so a day
+under a different trip could be diagnosed under the wrong URL; fixed by
+adding the trip/day ownership pair-check before any read. (2) coordinate
+validation accepted any int/float including `NaN`/`inf`/out-of-range; fixed by
+rejecting non-finite and out-of-range values per axis. Both are covered by new
+tests (mismatch → 404, `NaN`/`inf`/out-of-range → missing).
+
+**Tests:** `backend/tests/test_route_quality_diagnostic.py` (26 tests) —
+disabled-flag (no `ItineraryService` import touched), 0/1 eligible stop,
+2+ located → ready/safe, missing-coordinate → honest/unsafe, flight/hotel/note
+exclusion, manual-order preservation, invalid/out-of-range/non-finite
+coordinate rejection, trip/day ownership-binding (mismatch → 404, unowned
+trip → 404, matching pair succeeds), and source-scan guards proving no
+provider/LLM/write symbols exist in the service. The `ItineraryService` import
+is lazy (deferred past the flag check) purely so the disabled-path and
+pure-logic tests can run without the full supabase/`app.models` stack in this
+sandbox; production behavior is unchanged. 26/26 pass locally; sibling
+`route_estimate`/registry/adapter suites (158 tests together) unaffected.
+
+**Next (not this PR):** PR B — read-only frontend insight surface rendering
+this diagnostic in plain English, still no reorder/write. PR C — explicit
+user-approved reorder-proposal contract (still no auto-apply).
+
+### AI Route Planning v1 ADR (docs-only, merged)
 
 Decision-only product + technical contract for the **AI advisor layer** on top
 of the closed Route Planning v1 foundation (Google Routes backend, inline
