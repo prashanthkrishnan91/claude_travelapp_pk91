@@ -1,8 +1,63 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-08 (AI Route Planning v1 — PR A, this branch)
+Last updated: 2026-07-09 (AI Route Planning v1 — PR B, this branch)
 
-### AI Route Planning v1 — PR A: route-quality diagnostic (backend, flag-gated, this branch)
+### AI Route Planning v1 — PR B: read-only frontend route-readiness note (this branch)
+
+Read-only frontend affordance consuming the PR A diagnostic endpoint
+(`GET /itinerary/{trip_id}/days/{day_id}/route-quality-diagnostic`), per
+`AI_ROUTE_PLANNING_V1_ADR.md` Section 9 (PR B of the 3-PR sequence). **No LLM
+call, no AI-generated prose, no Google Routes call, no route-estimate call, no
+itinerary mutation, no auto-reorder, no user-approved reorder yet, no writes,
+no SQL, no backend/provider change, no new route panel, no map line,
+`CheckRoutePanel` stays deleted.**
+
+New: `fetchRouteQualityDiagnostic(tripId, dayId)` in `frontend/src/lib/api.ts`
+(GET only, mirrors the `fetchBookingLinks`/`apiFetch` pattern — auto
+camelCase). New types in `frontend/src/types/index.ts`:
+`RouteQualityDiagnosticResponse`, `DiagnosticStopSummary`,
+`ExcludedStopSummary`, `RouteQualityDiagnosticStatus` — mirror the backend
+Pydantic contract field-for-field (no invented schema). New
+`RouteQualityDiagnosticNote` component in `ItineraryDayColumn.tsx`, rendered
+directly below the existing `RouteReadinessStatus` note (same inline-connector
+area — no new panel). Renders a small "Check route readiness" button; the
+diagnostic fetch only fires from that button's `onClick` — never from a
+`useEffect`, page load, day render, day switch, or itinerary refresh.
+
+Renders deterministic, honest copy per backend `status`: `disabled` →
+"Route readiness review isn't turned on for this trip yet."; `insufficient_stops`
+→ "Only N eligible stop(s) found. Add more stops with locations to review
+route order."; `missing_coordinates` → "X of Y stops have location data. Add
+locations before route planning." + a travel-time disclaimer; `ready` → "This
+day is ready for route review." + the same travel-time disclaimer (never
+implies times were estimated, since `route_data_status` is always
+`"unavailable"` in PR A). When `excludedStops` is non-empty, an additional
+line names the excluded item types (e.g. "Flights excluded from route
+planning v1."). `safe_for_ai`/`ai_blockers` are read internally only — never
+surfaced as raw jargon to the user.
+
+**Tests:** `frontend/tests/route-quality-diagnostic-note.test.mjs` (16 tests)
+— GET-only + correct endpoint, component defined/rendered, fetch never inside
+a `useEffect`, fetch only wired to `onClick`, all 4 status-copy states render,
+excluded-stops note renders, ready-state copy never implies estimated times,
+no mutation/write call in the component, no `callRouteEstimate` call/import in
+the component, `CheckRoutePanel` not resurrected, types exported. 16/16 pass;
+full frontend suite unaffected (same 14 pre-existing failures as `main`,
+confirmed via `git stash` diff — zero new failures). `tsc --noEmit` clean;
+`next lint` clean on touched files.
+
+**Visual proof:** no live trip/auth session available in this sandbox: used a
+static, clearly-labeled **synthetic** mockup (`route-diagnostic-preview.html`)
+rendered via local Playwright at desktop (1000×1400) and mobile (390×1600)
+viewports, showing all 5 states (before click, ready, missing-coordinates +
+excluded, insufficient-stops, disabled) using the actual design tokens
+(`--ds-bone`/`--ds-linen`/`--ds-hairline`/`--ds-marine-ink`). Not a live-app
+screenshot — labeled as such in the PR body.
+
+**Next (not this PR):** PR C — explicit user-approved reorder-proposal
+contract (still no auto-apply).
+
+### AI Route Planning v1 — PR A: route-quality diagnostic (backend, flag-gated, merged)
 
 Read-only, deterministic diagnostic substrate for a future AI advisor, per
 `AI_ROUTE_PLANNING_V1_ADR.md` Section 9 (PR A of the 3-PR sequence). **No LLM

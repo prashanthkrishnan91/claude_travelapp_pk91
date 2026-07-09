@@ -31,6 +31,7 @@ import type {
   SavedItemCreate,
   RouteableStopPayload,
   RouteEstimateResponse,
+  RouteQualityDiagnosticResponse,
 } from "@/types";
 import { supabase } from "./supabase";
 import { normalizeConciergeResponse } from "./concierge/types";
@@ -426,6 +427,21 @@ export async function callRouteEstimate(
       method: "POST",
       body: JSON.stringify(payload),
     },
+  );
+}
+
+/**
+ * GET the read-only route-quality diagnostic for a day (PR #526). Only ever
+ * called from an explicit user click — never on render, day switch, or
+ * itinerary refresh. Performs no LLM/provider/Google Routes work itself; it
+ * just reads the deterministic backend diagnostic.
+ */
+export async function fetchRouteQualityDiagnostic(
+  tripId: string,
+  dayId: string,
+): Promise<RouteQualityDiagnosticResponse> {
+  return apiFetch<RouteQualityDiagnosticResponse>(
+    `/itinerary/${tripId}/days/${dayId}/route-quality-diagnostic`,
   );
 }
 
