@@ -32,6 +32,7 @@ import type {
   RouteableStopPayload,
   RouteEstimateResponse,
   RouteQualityDiagnosticResponse,
+  RouteReorderApplyResponse,
 } from "@/types";
 import { supabase } from "./supabase";
 import { normalizeConciergeResponse } from "./concierge/types";
@@ -442,6 +443,29 @@ export async function fetchRouteQualityDiagnostic(
 ): Promise<RouteQualityDiagnosticResponse> {
   return apiFetch<RouteQualityDiagnosticResponse>(
     `/itinerary/${tripId}/days/${dayId}/route-quality-diagnostic`,
+  );
+}
+
+/**
+ * POST the apply endpoint for an explicit, user-confirmed one-day reorder
+ * (PR C). Only ever called from an explicit "Apply this order" confirm
+ * handler — never on render, never automatically. Sends both the previewed
+ * current and proposed order so the server can verify nothing changed
+ * since the preview and reject a stale/mismatched request before writing.
+ */
+export async function applyRouteReorderProposal(
+  tripId: string,
+  dayId: string,
+  currentOrder: string[],
+  proposedOrder: string[],
+): Promise<RouteReorderApplyResponse> {
+  const payload = toSnake({ currentOrder, proposedOrder });
+  return apiFetch<RouteReorderApplyResponse>(
+    `/itinerary/${tripId}/days/${dayId}/route-reorder-proposal/apply`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }
 

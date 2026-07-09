@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
-from app.routes import ai_router, cards_router, compare_router, context_router, dashboard_router, deals_router, explore_router, itinerary_router, optimize_router, plan_router, resolve_router, route_estimate_router, route_quality_diagnostic_router, saved_items_router, search_router, travel_router, trips_router, value_router
+from app.routes import ai_router, cards_router, compare_router, context_router, dashboard_router, deals_router, explore_router, itinerary_router, optimize_router, plan_router, resolve_router, route_estimate_router, route_quality_diagnostic_router, route_reorder_proposal_router, saved_items_router, search_router, travel_router, trips_router, value_router
 
 print("App starting...")
 
@@ -105,6 +105,7 @@ app.include_router(plan_router)
 app.include_router(resolve_router)
 app.include_router(route_estimate_router)
 app.include_router(route_quality_diagnostic_router)
+app.include_router(route_reorder_proposal_router)
 app.include_router(saved_items_router)
 app.include_router(search_router)
 app.include_router(travel_router)

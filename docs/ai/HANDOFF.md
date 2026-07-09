@@ -1,50 +1,105 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-09 (AI Route Planning v1 — PR B, this branch)
+Last updated: 2026-07-09 (AI Route Planning v1 — PR C, this branch)
 
-### AI Route Planning v1 — PR B: read-only frontend route-readiness note (this branch)
+### AI Route Planning v1 — PR C: explicit user-approved reorder-proposal apply contract (this branch)
 
-Read-only frontend affordance consuming the PR A diagnostic endpoint
-(`GET /itinerary/{trip_id}/days/{day_id}/route-quality-diagnostic`), per
-`AI_ROUTE_PLANNING_V1_ADR.md` Section 9 (PR B of the 3-PR sequence). **No LLM
-call, no AI-generated prose, no Google Routes call, no route-estimate call, no
-itinerary mutation, no auto-reorder, no user-approved reorder yet, no writes,
-no SQL, no backend/provider change, no new route panel, no map line,
-`CheckRoutePanel` stays deleted.**
+Turns a proposed one-day reorder into a write **only** after an explicit user
+confirmation of a shown before/after preview, per `AI_ROUTE_PLANNING_V1_ADR.md`
+Section 9 (PR C, final PR of the 3-PR sequence). **No LLM call, no
+AI-generated suggestion (no proposal generator exists in this PR — the apply
+contract is the whole slice), no Google Routes call, no new route-estimate
+call site, no auto-reorder, no write without explicit confirmation, no
+multi-day/cross-day reorder, no map line, no new route panel, `CheckRoutePanel`
+stays deleted, no SQL.**
 
-New: `fetchRouteQualityDiagnostic(tripId, dayId)` in `frontend/src/lib/api.ts`
-(GET only, mirrors the `fetchBookingLinks`/`apiFetch` pattern — auto
-camelCase). New types in `frontend/src/types/index.ts`:
-`RouteQualityDiagnosticResponse`, `DiagnosticStopSummary`,
-`ExcludedStopSummary`, `RouteQualityDiagnosticStatus` — mirror the backend
-Pydantic contract field-for-field (no invented schema). New
-`RouteQualityDiagnosticNote` component in `ItineraryDayColumn.tsx`, rendered
-directly below the existing `RouteReadinessStatus` note (same inline-connector
-area — no new panel). Renders a small "Check route readiness" button; the
-diagnostic fetch only fires from that button's `onClick` — never from a
-`useEffect`, page load, day render, day switch, or itinerary refresh.
+Backend: `POST /itinerary/{trip_id}/days/{day_id}/route-reorder-proposal/apply`
+(`backend/app/routes/route_reorder_proposal.py` →
+`backend/app/services/route_reorder_proposal.py`), flag-gated
+(`route_reorder_proposal_v1_enabled`, default `False`). Verifies trip/day
+ownership (reuses the `route_quality_diagnostic` ownership-check pattern),
+then fails closed if: the item set differs (added/removed/duplicated/
+cross-day item), or `current_order` no longer matches the day's actual
+persisted order (stale-preview detection). Only on every check passing does it
+write — and only the existing `ItineraryItem.position` field, via the
+existing `ItineraryService.update_item` ownership-checked path (no parallel
+data model), and only for items whose position actually changed.
+`RouteReorderApplyResponse.status` is a closed `Literal["disabled",
+"rejected", "applied"]`, not a plain `str`.
 
-Renders deterministic, honest copy per backend `status`: `disabled` →
-"Route readiness review isn't turned on for this trip yet."; `insufficient_stops`
-→ "Only N eligible stop(s) found. Add more stops with locations to review
-route order."; `missing_coordinates` → "X of Y stops have location data. Add
-locations before route planning." + a travel-time disclaimer; `ready` → "This
-day is ready for route review." + the same travel-time disclaimer (never
-implies times were estimated, since `route_data_status` is always
-`"unavailable"` in PR A). When `excludedStops` is non-empty, an additional
-line names the excluded item types (e.g. "Flights excluded from route
-planning v1."). `safe_for_ai`/`ai_blockers` are read internally only — never
-surfaced as raw jargon to the user.
+**Post-open-PR audit patch (same PR):** a reviewer found a partial-write risk
+— the write loop applies positions via multiple sequential `update_item`
+calls (no atomic/batch position-write primitive exists in this repo — same
+one-PATCH-per-item pattern as the existing drag-and-drop reorder), so a
+mid-sequence failure could leave a day partially reordered. Fixed with
+application-level rollback (no SQL/RPC added): every applied position change
+is tracked, and if any write raises, every already-applied item is rolled
+back (best-effort, reverse order) before a fail-closed `HTTPException(502)`
+is raised — the caller can never receive `status="applied"` for a
+partially-written day. A rollback write that itself fails is logged and
+skipped (never silently swallowed into a false success). Covered by 3 new
+tests simulating a mid-apply failure after one successful write.
 
-**Tests:** `frontend/tests/route-quality-diagnostic-note.test.mjs` (16 tests)
-— GET-only + correct endpoint, component defined/rendered, fetch never inside
-a `useEffect`, fetch only wired to `onClick`, all 4 status-copy states render,
-excluded-stops note renders, ready-state copy never implies estimated times,
-no mutation/write call in the component, no `callRouteEstimate` call/import in
-the component, `CheckRoutePanel` not resurrected, types exported. 16/16 pass;
-full frontend suite unaffected (same 14 pre-existing failures as `main`,
-confirmed via `git stash` diff — zero new failures). `tsc --noEmit` clean;
-`next lint` clean on touched files.
+Frontend: `applyRouteReorderProposal(...)` in `api.ts` (POST only, to the
+apply endpoint) and a new `ReorderProposalPreview` component in
+`ItineraryDayColumn.tsx`, rendered next to `RouteQualityDiagnosticNote`. Shows
+current order + proposed order side by side, "Nothing changes until you
+confirm. This only reorders the stops shown below.", and Cancel/"Apply this
+order" actions. Cancel only sets local dismissed state (no call). Confirm is
+guarded against double-submit and is the only place the apply helper is
+called. **No proposal generator exists in this PR** — the component is wired
+in the running app with a hardcoded `proposal={null}`, so it never renders
+today; it exists as a reusable, fully-tested component for a later PR to wire
+to a real (still-gated) proposal source.
+
+**Tests:** `backend/tests/test_route_reorder_proposal.py` (18 tests) —
+disabled flag, ownership (cross-trip day, unowned trip), item-set validation
+(missing/extra/duplicate/cross-day item), stale-`current_order` rejection,
+successful apply (writes only changed positions, preserves item set exactly,
+only reachable via explicit call), **mid-apply failure rolls back
+already-applied items to their original positions and raises (never returns
+`status="applied"`), and a failing rollback write is logged and still fails
+closed**, no LLM/provider symbols in source. 18/18 pass (44/44 alongside PR
+A's suite). `frontend/tests/reorder-proposal-apply.test.mjs` (21 tests) —
+apply helper POST-only/correct endpoint, preview shows both orders, cancel
+never calls apply, confirm is the only apply call site and is
+double-submit-guarded, no auto-call in a `useEffect`, no LLM/route-estimate
+call, `CheckRoutePanel` not resurrected, no "Optimize Day"/auto-reorder copy,
+types exported. 21/21 pass; full frontend suite 3915/3929 (same 14
+pre-existing failures as `main`, confirmed via `git stash` diff — zero new
+failures). `tsc --noEmit` clean; `next lint` clean on touched files. One
+pre-existing, unrelated backend test-collection error
+(`test_itinerary_auth_scope.py`, `ItineraryDay` import) reproduces on clean
+`main` in this sandbox — not caused by this PR.
+
+**Visual proof:** the shipped app never renders this component (`proposal`
+is always `null`), so there is no live in-app screenshot to take. Verified
+instead via a temporary local-only harness (component + fixture proposal
+mounted at an `/auth/*`-prefixed route to bypass the auth redirect, Next dev
+server, Playwright) — not committed; the resulting screenshots **are**
+committed at `docs/visual-proof/pr528/` (before/after preview, fail-closed
+error state after confirm — no live backend/DB in this sandbox to demonstrate
+a real "applied" success write, proven instead by the 18 backend contract
+tests — cancel → no-change, and a 375px mobile viewport). All states used the
+real component and real design tokens, not a synthetic mockup; the README in
+that folder labels the harness/inert-component caveat explicitly.
+
+**Next (not this PR):** AI Route Planning v1's 3-PR sequence is complete
+(A: diagnostic, B: read-only insight surface, C: this apply contract). A
+future PR may add a proposal *source* (LLM or deterministic), gated by its
+own ADR/safety review — it would only ever need to pass a `ReorderProposal`
+into this already-tested component.
+
+### AI Route Planning v1 — PR B: read-only frontend route-readiness note (merged)
+
+Read-only frontend affordance consuming the PR A diagnostic endpoint,
+rendering `RouteQualityDiagnosticNote` next to `RouteReadinessStatus` in
+`ItineraryDayColumn.tsx`. Fetch only fires from an explicit click, never a
+`useEffect`. No write, no SQL, no backend change. See PR A/PR C entries for
+the ownership/eligibility contract this reuses.
+
+<details>
+<summary>PR B implementation detail (historical)</summary>
 
 **Visual proof:** no live trip/auth session available in this sandbox: used a
 static, clearly-labeled **synthetic** mockup (`route-diagnostic-preview.html`)
@@ -56,6 +111,8 @@ screenshot — labeled as such in the PR body.
 
 **Next (not this PR):** PR C — explicit user-approved reorder-proposal
 contract (still no auto-apply).
+
+</details>
 
 ### AI Route Planning v1 — PR A: route-quality diagnostic (backend, flag-gated, merged)
 

@@ -7,12 +7,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
-import { ExcludedStopSummary, ItineraryDay, ItineraryItem, RouteEstimateLeg, RouteQualityDiagnosticResponse } from "@/types";
+import { ExcludedStopSummary, ItineraryDay, ItineraryItem, ReorderProposal, RouteEstimateLeg, RouteQualityDiagnosticResponse } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, computeRouteReadiness, getRouteableStopsForEstimate, summarizeHints } from "@/lib/travelHints";
-import { callRouteEstimate, fetchRouteQualityDiagnostic, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
+import { applyRouteReorderProposal, callRouteEstimate, fetchRouteQualityDiagnostic, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
 
@@ -499,6 +499,128 @@ function RouteQualityDiagnosticNote({ tripId, dayId }: { tripId: string; dayId: 
   );
 }
 
+// ─── ReorderProposalPreview ────────────────────────────────────────────────
+// Explicit user-approved reorder-proposal apply contract (AI Route Planning
+// v1 PR C). Renders only when a `proposal` is supplied — nothing in this PR
+// generates one, so this affordance is inert in the running app today. It
+// exists as a reusable, fully-wired, testable component for a later PR that
+// adds a (non-LLM or LLM, per that PR's own ADR gate) proposal source. This
+// PR only proves the apply contract: before/after preview, no write until
+// explicit confirm, cancel performs no write, fail-closed on any mismatch.
+
+function ReorderProposalPreview({
+  tripId,
+  dayId,
+  items,
+  proposal,
+  onApplied,
+}: {
+  tripId: string;
+  dayId: string;
+  items: ItineraryItem[];
+  proposal: ReorderProposal | null;
+  onApplied?: (order: string[]) => void;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDismissed(false);
+    setApplying(false);
+    setErrorMessage(null);
+  }, [proposal]);
+
+  if (!proposal || dismissed) return null;
+
+  const titleFor = (itemId: string) =>
+    items.find((item) => item.id === itemId)?.title ?? "Untitled stop";
+
+  const handleCancel = () => {
+    if (applying) return;
+    setDismissed(true);
+  };
+
+  const handleConfirm = async () => {
+    if (applying) return;
+    setApplying(true);
+    setErrorMessage(null);
+    try {
+      const result = await applyRouteReorderProposal(
+        tripId,
+        dayId,
+        proposal.currentOrder,
+        proposal.proposedOrder
+      );
+      if (result.status === "applied") {
+        onApplied?.(result.order);
+        setDismissed(true);
+      } else {
+        setErrorMessage(result.message || "This order couldn't be applied. Nothing changed.");
+      }
+    } catch {
+      setErrorMessage("This order couldn't be applied. Nothing changed.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="reorder-proposal-preview"
+      className="flex flex-col gap-2 px-2.5 py-2 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+    >
+      <p className="text-[10px] text-ds-folio-ink-mist leading-tight">
+        Nothing changes until you confirm. This only reorders the stops shown below.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <div data-testid="reorder-proposal-current">
+          <p className="text-[10px] font-medium text-ds-folio-ink">Current order</p>
+          <ol className="text-[10px] text-ds-folio-ink-mist list-decimal list-inside">
+            {proposal.currentOrder.map((itemId) => (
+              <li key={itemId}>{titleFor(itemId)}</li>
+            ))}
+          </ol>
+        </div>
+        <div data-testid="reorder-proposal-proposed">
+          <p className="text-[10px] font-medium text-ds-folio-ink">Proposed order</p>
+          <ol className="text-[10px] text-ds-folio-ink-mist list-decimal list-inside">
+            {proposal.proposedOrder.map((itemId) => (
+              <li key={itemId}>{titleFor(itemId)}</li>
+            ))}
+          </ol>
+        </div>
+      </div>
+      {errorMessage && (
+        <p className="text-[10px] text-ds-marine-ink" data-testid="reorder-proposal-error">
+          {errorMessage}
+        </p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={handleCancel}
+          disabled={applying}
+          data-testid="reorder-proposal-cancel"
+          className="px-2 py-1 rounded-md text-[10px] font-medium text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={applying}
+          data-testid="reorder-proposal-confirm"
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium text-white bg-ds-marine-ink disabled:opacity-50"
+        >
+          {applying && <Loader2 className="w-3 h-3 animate-spin" />}
+          Apply this order
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface ItineraryDayColumnProps {
   day: ItineraryDay;
   /** True when this day is the current target for left-panel "+" additions. */
@@ -965,6 +1087,15 @@ export function ItineraryDayColumn({
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
           <RouteQualityDiagnosticNote tripId={day.tripId} dayId={day.id} />
+          {/* No proposal source exists in this PR (PR C is the apply
+              contract only) — proposal is always null, so this affordance
+              never renders in the running app. */}
+          <ReorderProposalPreview
+            tripId={day.tripId}
+            dayId={day.id}
+            items={visibleItems}
+            proposal={null}
+          />
 
           {/* ── Empty day invitation ─────────────────────────────────── */}
           {day.items.length === 0 && (
