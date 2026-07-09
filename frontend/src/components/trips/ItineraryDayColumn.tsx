@@ -404,6 +404,126 @@ function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
   );
 }
 
+// ─── DayFlowReview ─────────────────────────────────────────────────────────
+// Deterministic, read-only, user-triggered review of the current day's route
+// flow (AI Route Planning v1 PR D). Computes only from data already loaded on
+// the client — visibleItems and the routeLegs already passed to the inline
+// connectors — via the existing getRouteableStopsForEstimate helper. No LLM
+// call, no reorder-proposal source, no provider/route-estimate call, no
+// itinerary mutation. Collapsed until the user clicks; never auto-expands.
+
+interface DayFlowSummary {
+  eligibleCount: number;
+  missingCoordinateTitles: string[];
+  hasExcludedStopTypes: boolean;
+}
+
+function summarizeDayFlow(items: ItineraryItem[]): DayFlowSummary {
+  const eligible = items.filter((item) => item.itemType === "activity" || item.itemType === "meal");
+  const located = new Set(getRouteableStopsForEstimate(items).map((stop) => stop.itemId));
+  const missingCoordinateTitles = eligible
+    .filter((item) => !located.has(item.id))
+    .map((item) => item.title);
+  const hasExcludedStopTypes = items.some(
+    (item) => item.itemType === "flight" || item.itemType === "hotel" || item.itemType === "transit" || item.itemType === "note",
+  );
+  return { eligibleCount: eligible.length, missingCoordinateTitles, hasExcludedStopTypes };
+}
+
+interface DayFlowLegSummary {
+  available: boolean;
+  legCount: number;
+  longestLeg: RouteEstimateLeg | null;
+  currentOrderTitles: string[];
+}
+
+/**
+ * Summarizes only what already exists in routeLegs — never fabricates a
+ * total unless every adjacent routable pair already has a numeric leg.
+ */
+function summarizeDayFlowLegs(items: ItineraryItem[], routeLegs?: RouteEstimateLeg[]): DayFlowLegSummary {
+  const routable = getRouteableStopsForEstimate(items);
+  const currentOrderTitles = routable.map((stop) => stop.title);
+  if (!routeLegs || routeLegs.length === 0) {
+    return { available: false, legCount: 0, longestLeg: null, currentOrderTitles };
+  }
+  const longestLeg = routeLegs.reduce<RouteEstimateLeg | null>(
+    (longest, leg) => (!longest || leg.durationSeconds > longest.durationSeconds ? leg : longest),
+    null,
+  );
+  return { available: true, legCount: routeLegs.length, longestLeg, currentOrderTitles };
+}
+
+function DayFlowReview({ items, routeLegs }: { items: ItineraryItem[]; routeLegs?: RouteEstimateLeg[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <div className="mt-1" data-testid="day-flow-review">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          data-testid="day-flow-review-btn"
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[36px]"
+        >
+          <ChevronDown className="w-3 h-3" aria-hidden="true" />
+          Review day flow
+        </button>
+      </div>
+    );
+  }
+
+  const flow = summarizeDayFlow(items);
+  const legSummary = summarizeDayFlowLegs(items, routeLegs);
+
+  return (
+    <div
+      data-testid="day-flow-review-result"
+      className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
+    >
+      <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
+      <div className="text-[10px] text-ds-folio-ink-mist leading-tight space-y-0.5 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium text-ds-folio-ink">Day flow review</span>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            data-testid="day-flow-review-collapse-btn"
+            className="flex items-center gap-1 text-ds-folio-ink-mist hover:text-ds-folio-ink"
+          >
+            <ChevronUp className="w-3 h-3" aria-hidden="true" />
+          </button>
+        </div>
+        <p>This review uses the route details already shown between stops.</p>
+        {flow.eligibleCount < 2 && <p>Add locations before route planning.</p>}
+        {flow.eligibleCount >= 2 && flow.missingCoordinateTitles.length > 0 && (
+          <p>
+            Missing coordinates: {flow.missingCoordinateTitles.join(", ")}. Add locations before route planning.
+          </p>
+        )}
+        {flow.hasExcludedStopTypes && <p>Hotels and flights are excluded from route planning v1.</p>}
+        {!legSummary.available && <p>No travel-time review is available yet.</p>}
+        {legSummary.available && (
+          <>
+            <p>
+              {legSummary.legCount} route leg{legSummary.legCount === 1 ? "" : "s"} shown between stops.
+            </p>
+            {legSummary.longestLeg && (
+              <p>
+                Longest leg: ~{Math.round(legSummary.longestLeg.durationSeconds / 60)} min ·{" "}
+                {(legSummary.longestLeg.distanceMeters / 1000).toFixed(1)} km.
+              </p>
+            )}
+            {legSummary.currentOrderTitles.length > 0 && (
+              <p>Current order: {legSummary.currentOrderTitles.join(" → ")}</p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── RouteQualityDiagnosticNote ───────────────────────────────────────────────
 // Read-only route-readiness affordance (PR #526 diagnostic). Fetches only on
 // explicit click — never on render, day switch, or itinerary refresh. Renders
@@ -1087,6 +1207,7 @@ export function ItineraryDayColumn({
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
           <RouteQualityDiagnosticNote tripId={day.tripId} dayId={day.id} />
+          <DayFlowReview items={visibleItems} routeLegs={routeLegs} />
           {/* No proposal source exists in this PR (PR C is the apply
               contract only) — proposal is always null, so this affordance
               never renders in the running app. */}
