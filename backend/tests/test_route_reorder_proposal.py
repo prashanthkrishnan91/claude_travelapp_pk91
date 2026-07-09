@@ -417,6 +417,12 @@ class TestPartialWriteRollback:
             )
         assert exc_info.value.status_code == 502
 
+        # Rollback fully succeeded, so the error copy may honestly claim
+        # the order was restored / nothing changed.
+        assert "restored" in exc_info.value.detail
+        assert "nothing changed" in exc_info.value.detail
+        assert "may need to be refreshed" not in exc_info.value.detail
+
         # Original positions are restored — no partial reorder survives.
         positions = {item.id: item.position for item in _FakeItineraryService.items}
         assert positions == {a: 0, b: 1, c: 2}
@@ -478,6 +484,13 @@ class TestPartialWriteRollback:
         # Rollback was attempted (recorded) even though it failed.
         assert len(_FakeItineraryService.updates) == 3
         assert _FakeItineraryService.updates[2] == (c, 2, user_id)
+
+        # The rollback write failed, so the error must NOT claim the order
+        # was restored or that nothing changed — that would be false. It
+        # must instead tell the user to refresh/review the current order.
+        assert "restored" not in exc_info.value.detail
+        assert "nothing changed" not in exc_info.value.detail
+        assert "may need to be refreshed" in exc_info.value.detail
 
 
 # ── no LLM / provider symbols ──────────────────────────────────────────────────
