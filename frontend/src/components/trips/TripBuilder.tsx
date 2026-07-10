@@ -1982,6 +1982,13 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
     const targetDay = days.find((d) => d.id === selectedDayId) ?? days[0];
     if (!targetDay) return;
     try {
+      // Coordinate parity hardening: ResearchResult's routeable metadata
+      // (lat/lng/placeId/category/...) lives in `result.metadata` (see
+      // mapHotelToResult in api.ts). Previously dropped entirely on add,
+      // same canonical write boundary as handleAddAttractionToItinerary.
+      const additionalDetails = extractRouteableTripItemMetadata(
+        (result.metadata ?? {}) as Record<string, unknown>,
+      );
       const newItem = await createItem(tripId, targetDay.id, {
         itemType: result.category as ItemType,
         title: result.title,
@@ -1989,6 +1996,7 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
         location: result.location,
         position: targetDay.items.length,
         bookingOptions: result.bookingOptions,
+        ...(Object.keys(additionalDetails).length > 0 ? { details: additionalDetails } : {}),
       });
       setDays((prev) =>
         prev.map((d) => d.id === targetDay.id ? { ...d, items: [...d.items, newItem] } : d)
