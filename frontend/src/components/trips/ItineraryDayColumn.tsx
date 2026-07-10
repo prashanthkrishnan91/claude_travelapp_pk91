@@ -904,8 +904,10 @@ export function ItineraryDayColumn({
   const routableStopsKey = routableStops.map((s) => `${s.itemId}:${s.lat},${s.lng}`).join("|");
 
   useEffect(() => {
+    // Clear immediately on every stop-signature change so a still-in-flight
+    // refetch never leaves a previous (now-stale) leg visible on screen.
+    setRouteLegs([]);
     if (routableStops.length < 2) {
-      setRouteLegs([]);
       return;
     }
     let cancelled = false;
