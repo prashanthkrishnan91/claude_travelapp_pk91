@@ -6,7 +6,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Footprints, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
+import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { ExcludedStopSummary, ItineraryDay, ItineraryItem, ReorderProposal, RouteEstimateLeg, RouteQualityDiagnosticResponse } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
@@ -172,20 +172,15 @@ function renderItemsWithConnectors(
           </div>
         );
       } else if (hint.kind === "far_apart") {
-        const est = hint.estimate!;
-        const mode = est.walkMinutes <= 20 ? "walk" : "drive";
-        const timeLabel = mode === "walk" ? `~${est.walkMinutes} min walk` : `~${est.driveMinutes} min drive`;
+        // No Google Routes leg for this pair — the local/haversine estimate
+        // is never presented as route timing. Only the far-apart warning
+        // copy (not a minute/km figure) is shown.
         connector = (
           <div key={`travel-${item.id}`} className="flex flex-col gap-1 px-3 py-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" data-testid="route-connector-unavailable">
               <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
-              {mode === "walk" ? (
-                <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-              ) : (
-                <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-              )}
-              <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{timeLabel}</span>
-              <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
+              <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+              <span className="text-[10px] text-ds-folio-ink-mist leading-snug italic">Route time unavailable</span>
             </div>
             <div className="flex items-center gap-1 pl-[29px] pr-1">
               <span className="text-[10px] text-ds-warning/70 leading-snug">{hint.label}</span>
@@ -193,18 +188,13 @@ function renderItemsWithConnectors(
           </div>
         );
       } else {
-        const est = hint.estimate!;
-        const mode = est.walkMinutes <= 20 ? "walk" : "drive";
+        // travel_ok, but no Google Routes leg for this pair — do not render
+        // the local/haversine minute/km estimate as if it were route timing.
         connector = (
-          <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1">
+          <div key={`travel-${item.id}`} className="flex items-center gap-1.5 px-3 py-1" data-testid="route-connector-unavailable">
             <div className="w-px h-4 bg-ds-hairline ml-[17px] flex-shrink-0" />
-            {mode === "walk" ? (
-              <Footprints className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-            ) : (
-              <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
-            )}
-            <span className="text-[10px] text-ds-folio-ink-mist leading-snug">{hint.label}</span>
-            <span className="text-[10px] text-ds-folio-ink-mist/60 leading-snug">· {est.distanceKm} km</span>
+            <Car className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0" />
+            <span className="text-[10px] text-ds-folio-ink-mist leading-snug italic">Route time unavailable</span>
           </div>
         );
       }
@@ -904,8 +894,10 @@ export function ItineraryDayColumn({
   const routableStopsKey = routableStops.map((s) => `${s.itemId}:${s.lat},${s.lng}`).join("|");
 
   useEffect(() => {
+    // Clear immediately on every stop-signature change so a still-in-flight
+    // refetch never leaves a previous (now-stale) leg visible on screen.
+    setRouteLegs([]);
     if (routableStops.length < 2) {
-      setRouteLegs([]);
       return;
     }
     let cancelled = false;

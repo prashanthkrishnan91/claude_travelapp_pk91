@@ -200,7 +200,7 @@ test("CheckRoutePanel no longer used in ItineraryDayColumn JSX", () => {
 
 test("callRouteEstimate is called inside a useEffect in ItineraryDayColumn", () => {
   // Find useEffect blocks and check that at least one calls callRouteEstimate
-  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,800}?)\}\s*,/g)]
+  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,900}?)\}\s*,/g)]
     .map((m) => m[1] ?? "");
   assert.ok(useEffectBodies.length > 0, "at least one useEffect must exist");
   const hasRouteEstimateCall = useEffectBodies.some((body) =>
@@ -215,7 +215,7 @@ test("callRouteEstimate is called inside a useEffect in ItineraryDayColumn", () 
 
 test("route-estimate effect guards on routableStops.length < 2", () => {
   // The useEffect body that contains callRouteEstimate must also guard on length < 2
-  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,800}?)\}\s*,/g)]
+  const useEffectBodies = [...dayColumnSrc.matchAll(/useEffect\s*\(\s*\(\)\s*=>\s*\{([\s\S]{0,900}?)\}\s*,/g)]
     .map((m) => m[1] ?? "");
   const routeEffect = useEffectBodies.find((body) => /callRouteEstimate/.test(body));
   assert.ok(routeEffect, "must find useEffect containing callRouteEstimate");

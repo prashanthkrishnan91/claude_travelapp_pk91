@@ -379,3 +379,100 @@ class TestNoProviderCallBeforeDayOwnership:
             resp = _auth_client.post(_ROUTE_URL, json=_VALID_BODY)
         assert resp.status_code == 404
         assert mock_call.call_count == 0
+
+    def test_trip_not_owned_returns_404_and_no_adapter_call(self, monkeypatch):
+        """Unowned trip (trip ownership check fails) — must 404 before any provider call."""
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        db = MagicMock()
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        with patch.object(svc, "_verify_trip_ownership", side_effect=HTTPException(status_code=404, detail="Trip not found")), \
+             patch.object(svc, "call_compute_routes") as mock_call:
+            resp = _auth_client.post(_ROUTE_URL, json=_VALID_BODY)
+        assert resp.status_code == 404
+        assert mock_call.call_count == 0
+
+
+# ── Tests: stop-count boundary validation ─────────────────────────────────────
+
+
+class TestStopCountBoundaries:
+    def test_zero_stops_returns_422(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        resp = _auth_client.post(_ROUTE_URL, json={"stops": []})
+        assert resp.status_code == 422
+
+    def test_one_stop_returns_422(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        resp = _auth_client.post(_ROUTE_URL, json={"stops": [_STOP_A]})
+        assert resp.status_code == 422
+
+    def test_one_stop_no_adapter_call(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        with patch.object(svc, "call_compute_routes") as mock_call:
+            _auth_client.post(_ROUTE_URL, json={"stops": [_STOP_A]})
+        assert mock_call.call_count == 0
+
+    def test_eleven_stops_returns_422(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        stops = [
+            {"item_id": f"s{i}", "title": f"Stop {i}", "item_type": "activity", "lat": 25.0 + i * 0.01, "lng": -80.0}
+            for i in range(11)
+        ]
+        resp = _auth_client.post(_ROUTE_URL, json={"stops": stops})
+        assert resp.status_code == 422
+
+    def test_eleven_stops_no_adapter_call(self, monkeypatch):
+        import app.services.route_estimate as svc
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        stops = [
+            {"item_id": f"s{i}", "title": f"Stop {i}", "item_type": "activity", "lat": 25.0 + i * 0.01, "lng": -80.0}
+            for i in range(11)
+        ]
+        with patch.object(svc, "call_compute_routes") as mock_call:
+            _auth_client.post(_ROUTE_URL, json={"stops": stops})
+        assert mock_call.call_count == 0
+
+    def test_ten_stops_within_limit_reaches_provider(self, monkeypatch):
+        """Exactly MAX_ROUTABLE_STOPS (10) must not be rejected at the count-boundary check."""
+        import app.services.route_estimate as svc
+        from app.services.google_routes_adapter import AdapterResult, LegEstimate
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True, key="fake-key"))
+        db = _db_both_owned()
+        monkeypatch.setattr(sys.modules[__name__], "_mock_db", db)
+        stops = [
+            {"item_id": f"s{i}", "title": f"Stop {i}", "item_type": "activity", "lat": 25.0 + i * 0.01, "lng": -80.0}
+            for i in range(10)
+        ]
+        with patch.object(svc, "call_compute_routes") as mock_call:
+            mock_call.return_value = AdapterResult(estimates=[LegEstimate("s0", "s1", 100, 60, 0)], provider_call_count=1)
+            resp = _auth_client.post(_ROUTE_URL, json={"stops": stops})
+        assert resp.status_code == 200
+        assert mock_call.call_count == 1
+
+
+# ── Tests: response status vocabulary is closed (Pydantic Literal) ────────────
+
+
+class TestStatusVocabularyIsClosed:
+    def test_response_model_status_field_is_closed_literal(self):
+        from app.models.route_estimate import RouteEstimateResponse
+        field = RouteEstimateResponse.model_fields["status"]
+        # A closed Literal type exposes __args__ with exactly the 4 allowed values.
+        allowed = set(getattr(field.annotation, "__args__", ()))
+        assert allowed == {"disabled", "not_configured", "success", "provider_error"}
+
+    def test_unlisted_status_value_rejected_by_model(self):
+        from app.models.route_estimate import RouteEstimateResponse
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            RouteEstimateResponse(
+                status="fabricated_ok",  # not in the closed vocabulary
+                reason="x",
+                message="x",
+                provider="google_routes",
+            )

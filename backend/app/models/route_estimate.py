@@ -6,7 +6,7 @@ No fabricated coordinates, no reordering, no geocoding.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,7 +63,7 @@ class RouteEstimateResponse(BaseModel):
     estimates is non-empty only when status == "success" and the provider returned data.
     """
 
-    status: str
+    status: Literal["disabled", "not_configured", "success", "provider_error"]
     reason: str  # machine-readable reason code
     message: str  # user-safe explanation
     provider: str
