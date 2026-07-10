@@ -413,21 +413,44 @@ function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
 // itinerary mutation. Collapsed until the user clicks; never auto-expands.
 
 interface DayFlowSummary {
-  eligibleCount: number;
+  locatedCount: number;
   missingCoordinateTitles: string[];
-  hasExcludedStopTypes: boolean;
+  excludedStopTypes: string[];
+}
+
+// Fixed display order — also controls join order in describeExcludedStopTypes
+// ("hotel" before "flight" reads as "Hotels and flights").
+const EXCLUDED_STOP_TYPE_ORDER = ["hotel", "flight", "transit", "note"] as const;
+const EXCLUDED_STOP_TYPE_LABELS: Record<string, string> = {
+  hotel: "Hotels",
+  flight: "Flights",
+  transit: "Transit",
+  note: "Notes",
+};
+
+/** Renders exact copy for only the excluded item types actually present — never a fixed claim. */
+function describeExcludedStopTypes(excludedStopTypes: string[]): string | null {
+  if (excludedStopTypes.length === 0) return null;
+  const labels = excludedStopTypes.map((type) => EXCLUDED_STOP_TYPE_LABELS[type]);
+  const joined =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+  const verb = labels.length === 1 && excludedStopTypes[0] === "transit" ? "is" : "are";
+  return `${joined} ${verb} excluded from route planning v1.`;
 }
 
 function summarizeDayFlow(items: ItineraryItem[]): DayFlowSummary {
   const eligible = items.filter((item) => item.itemType === "activity" || item.itemType === "meal");
-  const located = new Set(getRouteableStopsForEstimate(items).map((stop) => stop.itemId));
+  const located = getRouteableStopsForEstimate(items);
+  const locatedIds = new Set(located.map((stop) => stop.itemId));
   const missingCoordinateTitles = eligible
-    .filter((item) => !located.has(item.id))
+    .filter((item) => !locatedIds.has(item.id))
     .map((item) => item.title);
-  const hasExcludedStopTypes = items.some(
-    (item) => item.itemType === "flight" || item.itemType === "hotel" || item.itemType === "transit" || item.itemType === "note",
+  const excludedStopTypes = EXCLUDED_STOP_TYPE_ORDER.filter((type) =>
+    items.some((item) => item.itemType === type),
   );
-  return { eligibleCount: eligible.length, missingCoordinateTitles, hasExcludedStopTypes };
+  return { locatedCount: located.length, missingCoordinateTitles, excludedStopTypes };
 }
 
 interface DayFlowLegSummary {
@@ -495,13 +518,14 @@ function DayFlowReview({ items, routeLegs }: { items: ItineraryItem[]; routeLegs
           </button>
         </div>
         <p>This review uses the route details already shown between stops.</p>
-        {flow.eligibleCount < 2 && <p>Add locations before route planning.</p>}
-        {flow.eligibleCount >= 2 && flow.missingCoordinateTitles.length > 0 && (
+        {flow.missingCoordinateTitles.length > 0 ? (
           <p>
             Missing coordinates: {flow.missingCoordinateTitles.join(", ")}. Add locations before route planning.
           </p>
+        ) : (
+          flow.locatedCount < 2 && <p>Add another located activity or meal before route planning.</p>
         )}
-        {flow.hasExcludedStopTypes && <p>Hotels and flights are excluded from route planning v1.</p>}
+        {flow.excludedStopTypes.length > 0 && <p>{describeExcludedStopTypes(flow.excludedStopTypes)}</p>}
         {!legSummary.available && <p>No travel-time review is available yet.</p>}
         {legSummary.available && (
           <>

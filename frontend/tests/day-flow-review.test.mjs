@@ -14,9 +14,12 @@
  * 7.  No "Optimize Day" / auto-reorder language.
  * 8.  Missing-coordinate state renders honest copy.
  * 9.  Route-data-unavailable state renders honest copy.
- * 10. Excluded flights/hotels copy renders if applicable.
+ * 10. Excluded-stop-type copy renders only the types actually present (never
+ *     a fixed "Hotels and flights" claim when the day has neither, or only
+ *     one, of those types).
  * 11. Longest-leg/current-order summary renders using provided legs only.
  * 12. No fabricated total when route legs are incomplete/absent.
+ * 13. Readiness gate uses located/routable stop count, not just eligible count.
  */
 
 import test from "node:test";
@@ -149,16 +152,66 @@ test("DayFlowReview renders honest route-data-unavailable copy", () => {
   );
 });
 
-test("DayFlowReview renders excluded flights/hotels copy when applicable", () => {
+test("DayFlowReview renders excluded flights/hotels copy when both are present", () => {
+  const fnMatch = dayColumnSrc.match(/function describeExcludedStopTypes[\s\S]{0,700}/);
+  assert.ok(fnMatch, "describeExcludedStopTypes must exist");
   assert.match(
     componentSrc(),
-    /Hotels and flights are excluded from route planning v1\./,
-    "excluded stop types copy must render",
-  );
-  assert.match(
-    componentSrc(),
-    /hasExcludedStopTypes/,
+    /describeExcludedStopTypes\(flow\.excludedStopTypes\)/,
     "excluded copy must be conditioned on excluded stop types actually present",
+  );
+});
+
+test("describeExcludedStopTypes names only hotel when only hotel is present", () => {
+  assert.match(
+    dayColumnSrc,
+    /EXCLUDED_STOP_TYPE_LABELS[\s\S]{0,200}hotel:\s*"Hotels"/,
+    "hotel label must exist",
+  );
+  // Single-type join path must not force in "flights" text
+  const fnMatch = dayColumnSrc.match(/function describeExcludedStopTypes[\s\S]{0,700}/);
+  assert.ok(fnMatch);
+  assert.match(fnMatch[0], /labels\.length === 1\s*\n?\s*\?\s*labels\[0\]/, "single-type case must render only that type's label");
+});
+
+test("describeExcludedStopTypes does not hardcode 'Hotels and flights' as the only possible output", () => {
+  // The old hardcoded literal must be gone from the component body — copy
+  // must now be derived from describeExcludedStopTypes for every case.
+  assert.doesNotMatch(
+    componentSrc(),
+    /<p>Hotels and flights are excluded from route planning v1\.<\/p>/,
+    "must not hardcode a fixed excluded-types claim in JSX",
+  );
+});
+
+test("describeExcludedStopTypes renders singular 'Transit is excluded' for transit-only", () => {
+  const fnMatch = dayColumnSrc.match(/function describeExcludedStopTypes[\s\S]{0,700}/);
+  assert.ok(fnMatch, "describeExcludedStopTypes must exist");
+  assert.match(
+    fnMatch[0],
+    /excludedStopTypes\[0\] === "transit" \? "is" : "are"/,
+    "transit-only case must use singular verb form",
+  );
+});
+
+test("describeExcludedStopTypes renders 'Notes are excluded' for note-only", () => {
+  assert.match(
+    dayColumnSrc,
+    /EXCLUDED_STOP_TYPE_LABELS[\s\S]{0,200}note:\s*"Notes"/,
+    "note label must exist so a note-only day reads 'Notes are excluded from route planning v1.'",
+  );
+});
+
+test("excludedStopTypes is computed as a filtered array, not a single boolean", () => {
+  assert.match(
+    dayColumnSrc,
+    /excludedStopTypes:\s*string\[\]/,
+    "DayFlowSummary must carry excludedStopTypes as an array, not a boolean flag",
+  );
+  assert.doesNotMatch(
+    dayColumnSrc,
+    /hasExcludedStopTypes/,
+    "the old boolean hasExcludedStopTypes must be fully replaced",
   );
 });
 
@@ -223,4 +276,48 @@ test("DayFlowReview does not import any new provider/route-estimate helper", () 
     /import[^;]*generateReorderProposal[^;]*;/,
     "no new proposal-generation import must be added",
   );
+});
+
+// ---------------------------------------------------------------------------
+// 13. Readiness gate uses located/routable count, not just eligible count
+// ---------------------------------------------------------------------------
+
+test("summarizeDayFlow reports locatedCount from getRouteableStopsForEstimate, not just eligible count", () => {
+  const fnMatch = dayColumnSrc.match(/function summarizeDayFlow\(items: ItineraryItem\[\]\)[\s\S]{0,600}/);
+  assert.ok(fnMatch, "summarizeDayFlow must exist");
+  assert.match(
+    fnMatch[0],
+    /locatedCount:\s*located\.length/,
+    "summarizeDayFlow must return locatedCount derived from the routable stops list",
+  );
+});
+
+test("DayFlowReview gates the 'not enough located stops' copy on locatedCount, not eligibleCount", () => {
+  assert.match(
+    componentSrc(),
+    /flow\.locatedCount < 2/,
+    "the not-enough-located-stops gate must use flow.locatedCount",
+  );
+  assert.doesNotMatch(
+    componentSrc(),
+    /flow\.eligibleCount/,
+    "the old eligibleCount-based gate must be fully replaced",
+  );
+});
+
+test("DayFlowReview shows a non-misleading message for exactly one located stop with no missing coordinates", () => {
+  assert.match(
+    componentSrc(),
+    /Add another located activity or meal before route planning\./,
+    "must render the one-located-stop copy instead of implying missing coordinates",
+  );
+});
+
+test("missing-coordinate copy takes priority over the not-enough-located-stops copy when both could apply", () => {
+  const src = componentSrc();
+  const missingIdx = src.indexOf("flow.missingCoordinateTitles.length > 0 ?");
+  const locatedIdx = src.indexOf("flow.locatedCount < 2 && <p>Add another located");
+  assert.ok(missingIdx !== -1, "missing-coordinate branch must exist");
+  assert.ok(locatedIdx !== -1, "not-enough-located-stops branch must exist");
+  assert.ok(missingIdx < locatedIdx, "missing-coordinate branch must be checked first");
 });
