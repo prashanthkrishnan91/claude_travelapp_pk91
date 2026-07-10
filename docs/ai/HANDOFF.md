@@ -1,8 +1,24 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-10 (AI Route Planning v1 — PR E, this branch)
+Last updated: 2026-07-10 (remove-itinerary-diagnostics, this branch)
 
-### AI Route Planning v1 — PR E: itinerary coordinate parity hardening (this branch)
+### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (this branch)
+
+`RouteQualityDiagnosticNote` ("Check route readiness", PR B) and `DayFlowReview`
+("Review day flow", PR D) are **no longer rendered** in `ItineraryDayColumn.tsx`
+— user feedback was that both read as internal/debug tooling in a user-facing
+itinerary and duplicated the inline route connector information already shown
+between stops. Both components and their helpers were deleted outright (not
+flag-gated) from the frontend. Historical PR A/B entries below describing them
+as currently rendered are stale as of this PR — the backend
+`route-quality-diagnostic` endpoint (PR A) and `fetchRouteQualityDiagnostic`
+helper are untouched and still exist, just no longer called from the day
+column. Still rendered: the compact `RouteReadinessStatus` "X of Y stops have
+location data" indicator, inline route connectors, `callRouteEstimate`. No
+AI/LLM, no route optimization, no reorder UI added, no SQL, no backend change.
+Visual proof: `docs/visual-proof/pr532/`.
+
+### AI Route Planning v1 — PR E: itinerary coordinate parity hardening (merged)
 
 Audited every frontend add-to-itinerary path (Plan My Day, Concierge, Saved,
 Explore/search/card, Add to Day drawer) against the canonical routeable
@@ -108,7 +124,10 @@ tests simulating a mid-apply failure after one successful write.
 
 Frontend: `applyRouteReorderProposal(...)` in `api.ts` (POST only, to the
 apply endpoint) and a new `ReorderProposalPreview` component in
-`ItineraryDayColumn.tsx`, rendered next to `RouteQualityDiagnosticNote`. Shows
+`ItineraryDayColumn.tsx`, originally rendered next to `RouteQualityDiagnosticNote`
+(that neighbor was removed by the Journey Desk cleanup PR above —
+`ReorderProposalPreview` itself is unaffected, still wired with
+`proposal={null}`). Shows
 current order + proposed order side by side, "Nothing changes until you
 confirm. This only reorders the stops shown below.", and Cancel/"Apply this
 order" actions. Cancel only sets local dismissed state (no call). Confirm is
@@ -162,7 +181,10 @@ Read-only frontend affordance consuming the PR A diagnostic endpoint,
 rendering `RouteQualityDiagnosticNote` next to `RouteReadinessStatus` in
 `ItineraryDayColumn.tsx`. Fetch only fires from an explicit click, never a
 `useEffect`. No write, no SQL, no backend change. See PR A/PR C entries for
-the ownership/eligibility contract this reuses.
+the ownership/eligibility contract this reuses. **Removed from the running
+app by the Journey Desk cleanup PR at the top of this file** — the backend
+endpoint and `fetchRouteQualityDiagnostic` helper still exist, unused by the
+frontend.
 
 <details>
 <summary>PR B implementation detail (historical)</summary>
