@@ -67,7 +67,7 @@ test("travelHints uses readCanonicalLng in computeAdjacentHints", () => {
 test("readCanonicalLat resolves direct source.lat (backward compat)", () => {
   assert.match(
     metadataSrc,
-    /readNumber\(source\.lat\)/,
+    /readNumber\(source\.lat,/,
     "readCanonicalLat must try source.lat first",
   );
 });
@@ -75,7 +75,7 @@ test("readCanonicalLat resolves direct source.lat (backward compat)", () => {
 test("readCanonicalLng resolves direct source.lng (backward compat)", () => {
   assert.match(
     metadataSrc,
-    /readNumber\(source\.lng\)/,
+    /readNumber\(source\.lng,/,
     "readCanonicalLng must try source.lng first",
   );
 });
@@ -87,7 +87,7 @@ test("readCanonicalLng resolves direct source.lng (backward compat)", () => {
 test("readCanonicalLat resolves source.latitude alias", () => {
   assert.match(
     metadataSrc,
-    /readNumber\(source\.latitude\)/,
+    /readNumber\(source\.latitude,/,
     "readCanonicalLat must try source.latitude as alias",
   );
 });
@@ -95,7 +95,7 @@ test("readCanonicalLat resolves source.latitude alias", () => {
 test("readCanonicalLng resolves source.longitude alias", () => {
   assert.match(
     metadataSrc,
-    /readNumber\(source\.longitude\)/,
+    /readNumber\(source\.longitude,/,
     "readCanonicalLng must try source.longitude as alias",
   );
 });

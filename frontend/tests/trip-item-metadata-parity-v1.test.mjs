@@ -340,13 +340,16 @@ test("v1.1 — handleAddRestaurantToItinerary forwards canonical metadata into a
 // ---------------------------------------------------------------------------
 
 test("readCanonicalLat handles latitude alias", () => {
-  assert.match(metadataSrc, /readNumber\(source\.lat\) \?\? readNumber\(source\.latitude\)/);
+  assert.match(
+    metadataSrc,
+    /readNumber\(source\.lat, LAT_RANGE\) \?\? readNumber\(source\.latitude, LAT_RANGE\)/,
+  );
 });
 
 test("readCanonicalLng handles longitude and lon aliases", () => {
   assert.match(
     metadataSrc,
-    /readNumber\(source\.lng\) \?\? readNumber\(source\.longitude\) \?\? readNumber\(source\.lon\)/,
+    /readNumber\(source\.lng, LNG_RANGE\) \?\?\s*\n\s*readNumber\(source\.longitude, LNG_RANGE\) \?\?\s*\n\s*readNumber\(source\.lon, LNG_RANGE\)/,
   );
 });
 

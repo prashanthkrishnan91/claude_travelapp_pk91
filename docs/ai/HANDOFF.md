@@ -1,8 +1,60 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-09 (AI Route Planning v1 — PR C, this branch)
+Last updated: 2026-07-10 (AI Route Planning v1 — PR E, this branch)
 
-### AI Route Planning v1 — PR C: explicit user-approved reorder-proposal apply contract (this branch)
+### AI Route Planning v1 — PR E: itinerary coordinate parity hardening (this branch)
+
+Audited every frontend add-to-itinerary path (Plan My Day, Concierge, Saved,
+Explore/search/card, Add to Day drawer) against the canonical routeable
+metadata contract (`extractRouteableTripItemMetadata`/`readCanonicalLat`/
+`readCanonicalLng`/`hasRouteableCoordinates` in `tripItemMetadata.ts`).
+Plan My Day, Concierge (`addStructuredConciergeItemToTrip`/`saveToTripIdeas`),
+Saved-item conversion, and the Add to Day drawer (which routes through the
+same Build handlers) already preserve canonical coordinates correctly — no
+change needed there; guarded with new tests so a future refactor can't
+silently regress them.
+
+**Bug found — Explore "research result" add path dropped all metadata.**
+`TripBuilder.handleAddResult` (wired to `SearchResultCard`'s "+" action, the
+left-panel search-result list) called `createItem` with no `details` payload
+at all — every routeable field (`lat`/`lng`/`placeId`/`category`/...) carried
+in `ResearchResult.metadata` (e.g. `mapHotelToResult` in `api.ts` writes real
+`metadata.lat`/`metadata.lng`) was silently discarded on add, even though
+`createItem` already accepts a `details` param for exactly this purpose. Fixed
+by extracting `extractRouteableTripItemMetadata(result.metadata ?? {})` and
+passing it through as `details` — the same canonical write boundary already
+used by `handleAddAttractionToItinerary`/`handlePlanAddAttraction`. (This
+result list is currently wired to an empty `initialResults=[]` in production,
+so the path was inert today, but the fix closes the gap before it's wired up.)
+
+**Bug found — frontend canonical readers didn't range-check coordinates.**
+`readCanonicalLat`/`readCanonicalLng` accepted any finite number, including
+out-of-range junk (e.g. `lat: 999`). The backend route-quality-diagnostic port
+(`route_quality_diagnostic.py::_read_number`, PR A) already rejected
+out-of-range values per axis — so a bad coordinate could read as "routeable"
+on the frontend (`hasRouteableCoordinates`, `getRouteableStopsForEstimate`,
+`RouteReadinessStatus`, `DayFlowReview`, inline connectors) while the backend
+diagnostic honestly reported it missing. Fixed by adding the same
+`[-90,90]`/`[-180,180]` range check to `readNumber` in `tripItemMetadata.ts`,
+so both "canonical coordinate" definitions agree. Booleans/strings/NaN/
+Infinity were already rejected (unchanged).
+
+**No coordinate fabrication, no geocoding, no new provider/LLM/route-estimate
+call site, no reorder-proposal wiring, no itinerary mutation beyond normal
+add-item behavior, no SQL.**
+
+**Tests:** new `frontend/tests/itinerary-coordinate-parity-hardening-pr-e.test.mjs`
+(16 tests) covering all 4 live add paths' coordinate preservation, the
+`handleAddResult` fix, the range-check hardening, address-only-stays-
+non-routeable, and no-banned-scope guards. Updated 6 pre-existing tests in
+`travel-hints-canonical-coords.test.mjs`/`trip-item-metadata-parity-v1.test.mjs`
+whose regexes matched the old `readNumber(source.lat)` call shape (behavior
+unaffected, only the literal call signature changed to add the range arg).
+Full frontend suite: 3931/3945 pass (same 14 pre-existing failures as `main`,
+confirmed via `git stash` diff — zero new failures). `tsc --noEmit` clean;
+`next lint` clean on touched files.
+
+### AI Route Planning v1 — PR C: explicit user-approved reorder-proposal apply contract (merged)
 
 Turns a proposed one-day reorder into a write **only** after an explicit user
 confirmation of a shown before/after preview, per `AI_ROUTE_PLANNING_V1_ADR.md`

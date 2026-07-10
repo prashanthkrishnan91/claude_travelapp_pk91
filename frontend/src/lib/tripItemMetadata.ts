@@ -81,28 +81,40 @@ const CAMEL_TO_SNAKE: Record<RouteableKey, string> = {
   aiScore: "ai_score",
 };
 
-function readNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  return undefined;
+const LAT_RANGE: readonly [number, number] = [-90, 90];
+const LNG_RANGE: readonly [number, number] = [-180, 180];
+
+/**
+ * Read a finite number within [low, high], or undefined. Rejects booleans,
+ * non-numeric values, NaN/Infinity, and out-of-range values — a coordinate
+ * that fails this check must count as missing, never as located. Mirrors the
+ * backend port in `route_quality_diagnostic.py::_read_number` so the two
+ * "canonical coordinate" definitions never disagree on what counts as valid.
+ */
+function readNumber(value: unknown, range?: readonly [number, number]): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (range && (value < range[0] || value > range[1])) return undefined;
+  return value;
 }
 
 /**
  * Resolve a real numeric latitude from any common provider key.
  * Order: top-level `lat`/`latitude`, then nested `coordinates`/`geo`/`location`
  * (when those are objects carrying `{lat,lng}` or `{latitude,longitude}`).
- * Returns undefined when no real number is found — never geocodes.
+ * Returns undefined when no real number is found, or when the value is out of
+ * the valid Earth latitude range — never geocodes, never treats junk as real.
  */
 export function readCanonicalLat(
   source: Record<string, unknown> | null | undefined,
 ): number | undefined {
   if (!source) return undefined;
-  const direct = readNumber(source.lat) ?? readNumber(source.latitude);
+  const direct = readNumber(source.lat, LAT_RANGE) ?? readNumber(source.latitude, LAT_RANGE);
   if (direct !== undefined) return direct;
   for (const k of ["coordinates", "geo", "location", "coords", "position"]) {
     const nested = source[k];
     if (nested && typeof nested === "object") {
       const n = nested as Record<string, unknown>;
-      const v = readNumber(n.lat) ?? readNumber(n.latitude);
+      const v = readNumber(n.lat, LAT_RANGE) ?? readNumber(n.latitude, LAT_RANGE);
       if (v !== undefined) return v;
     }
   }
@@ -114,13 +126,19 @@ export function readCanonicalLng(
   source: Record<string, unknown> | null | undefined,
 ): number | undefined {
   if (!source) return undefined;
-  const direct = readNumber(source.lng) ?? readNumber(source.longitude) ?? readNumber(source.lon);
+  const direct =
+    readNumber(source.lng, LNG_RANGE) ??
+    readNumber(source.longitude, LNG_RANGE) ??
+    readNumber(source.lon, LNG_RANGE);
   if (direct !== undefined) return direct;
   for (const k of ["coordinates", "geo", "location", "coords", "position"]) {
     const nested = source[k];
     if (nested && typeof nested === "object") {
       const n = nested as Record<string, unknown>;
-      const v = readNumber(n.lng) ?? readNumber(n.longitude) ?? readNumber(n.lon);
+      const v =
+        readNumber(n.lng, LNG_RANGE) ??
+        readNumber(n.longitude, LNG_RANGE) ??
+        readNumber(n.lon, LNG_RANGE);
       if (v !== undefined) return v;
     }
   }
