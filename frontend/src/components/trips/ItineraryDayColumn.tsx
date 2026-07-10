@@ -7,12 +7,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CalendarDays, Car, Check, ChevronDown, ChevronUp, Clock, Hotel, Info, Loader2, MapPin, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
-import { ExcludedStopSummary, ItineraryDay, ItineraryItem, ReorderProposal, RouteEstimateLeg, RouteQualityDiagnosticResponse } from "@/types";
+import { ItineraryDay, ItineraryItem, ReorderProposal, RouteEstimateLeg } from "@/types";
 import type { StayMarker } from "@/lib/hotelStaySpans";
 import { FolioCard } from "@/components/ui/Folio";
 import { ItineraryItemCard } from "./ItineraryItemCard";
 import { computeAdjacentHints, computeRouteReadiness, getRouteableStopsForEstimate, summarizeHints } from "@/lib/travelHints";
-import { applyRouteReorderProposal, callRouteEstimate, fetchRouteQualityDiagnostic, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
+import { applyRouteReorderProposal, callRouteEstimate, suggestDayTimeline, updateItemTimeline, type TimelineSuggestion } from "@/lib/api";
 
 // ─── Timeline helpers ────────────────────────────────────────────────────────
 
@@ -390,245 +390,6 @@ function RouteReadinessStatus({ items }: { items: ItineraryItem[] }) {
         {status.withCoords} of {status.total} stops have location data.{" "}
         <span className="opacity-70">Add locations before route planning.</span>
       </span>
-    </div>
-  );
-}
-
-// ─── DayFlowReview ─────────────────────────────────────────────────────────
-// Deterministic, read-only, user-triggered review of the current day's route
-// flow (AI Route Planning v1 PR D). Computes only from data already loaded on
-// the client — visibleItems and the routeLegs already passed to the inline
-// connectors — via the existing getRouteableStopsForEstimate helper. No LLM
-// call, no reorder-proposal source, no provider/route-estimate call, no
-// itinerary mutation. Collapsed until the user clicks; never auto-expands.
-
-interface DayFlowSummary {
-  locatedCount: number;
-  missingCoordinateTitles: string[];
-  excludedStopTypes: string[];
-}
-
-// Fixed display order — also controls join order in describeExcludedStopTypes
-// ("hotel" before "flight" reads as "Hotels and flights").
-const EXCLUDED_STOP_TYPE_ORDER = ["hotel", "flight", "transit", "note"] as const;
-const EXCLUDED_STOP_TYPE_LABELS: Record<string, string> = {
-  hotel: "Hotels",
-  flight: "Flights",
-  transit: "Transit",
-  note: "Notes",
-};
-
-/** Renders exact copy for only the excluded item types actually present — never a fixed claim. */
-function describeExcludedStopTypes(excludedStopTypes: string[]): string | null {
-  if (excludedStopTypes.length === 0) return null;
-  const labels = excludedStopTypes.map((type) => EXCLUDED_STOP_TYPE_LABELS[type]);
-  const joined =
-    labels.length === 1
-      ? labels[0]
-      : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
-  const verb = labels.length === 1 && excludedStopTypes[0] === "transit" ? "is" : "are";
-  return `${joined} ${verb} excluded from route planning v1.`;
-}
-
-function summarizeDayFlow(items: ItineraryItem[]): DayFlowSummary {
-  const eligible = items.filter((item) => item.itemType === "activity" || item.itemType === "meal");
-  const located = getRouteableStopsForEstimate(items);
-  const locatedIds = new Set(located.map((stop) => stop.itemId));
-  const missingCoordinateTitles = eligible
-    .filter((item) => !locatedIds.has(item.id))
-    .map((item) => item.title);
-  const excludedStopTypes = EXCLUDED_STOP_TYPE_ORDER.filter((type) =>
-    items.some((item) => item.itemType === type),
-  );
-  return { locatedCount: located.length, missingCoordinateTitles, excludedStopTypes };
-}
-
-interface DayFlowLegSummary {
-  available: boolean;
-  legCount: number;
-  longestLeg: RouteEstimateLeg | null;
-  currentOrderTitles: string[];
-}
-
-/**
- * Summarizes only what already exists in routeLegs — never fabricates a
- * total unless every adjacent routable pair already has a numeric leg.
- */
-function summarizeDayFlowLegs(items: ItineraryItem[], routeLegs?: RouteEstimateLeg[]): DayFlowLegSummary {
-  const routable = getRouteableStopsForEstimate(items);
-  const currentOrderTitles = routable.map((stop) => stop.title);
-  if (!routeLegs || routeLegs.length === 0) {
-    return { available: false, legCount: 0, longestLeg: null, currentOrderTitles };
-  }
-  const longestLeg = routeLegs.reduce<RouteEstimateLeg | null>(
-    (longest, leg) => (!longest || leg.durationSeconds > longest.durationSeconds ? leg : longest),
-    null,
-  );
-  return { available: true, legCount: routeLegs.length, longestLeg, currentOrderTitles };
-}
-
-function DayFlowReview({ items, routeLegs }: { items: ItineraryItem[]; routeLegs?: RouteEstimateLeg[] }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!expanded) {
-    return (
-      <div className="mt-1" data-testid="day-flow-review">
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          data-testid="day-flow-review-btn"
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[36px]"
-        >
-          <ChevronDown className="w-3 h-3" aria-hidden="true" />
-          Review day flow
-        </button>
-      </div>
-    );
-  }
-
-  const flow = summarizeDayFlow(items);
-  const legSummary = summarizeDayFlowLegs(items, routeLegs);
-
-  return (
-    <div
-      data-testid="day-flow-review-result"
-      className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
-    >
-      <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
-      <div className="text-[10px] text-ds-folio-ink-mist leading-tight space-y-0.5 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-ds-folio-ink">Day flow review</span>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            data-testid="day-flow-review-collapse-btn"
-            className="flex items-center gap-1 text-ds-folio-ink-mist hover:text-ds-folio-ink"
-          >
-            <ChevronUp className="w-3 h-3" aria-hidden="true" />
-          </button>
-        </div>
-        <p>This review uses the route details already shown between stops.</p>
-        {flow.missingCoordinateTitles.length > 0 ? (
-          <p>
-            Missing coordinates: {flow.missingCoordinateTitles.join(", ")}. Add locations before route planning.
-          </p>
-        ) : (
-          flow.locatedCount < 2 && <p>Add another located activity or meal before route planning.</p>
-        )}
-        {flow.excludedStopTypes.length > 0 && <p>{describeExcludedStopTypes(flow.excludedStopTypes)}</p>}
-        {!legSummary.available && <p>No travel-time review is available yet.</p>}
-        {legSummary.available && (
-          <>
-            <p>
-              {legSummary.legCount} route leg{legSummary.legCount === 1 ? "" : "s"} shown between stops.
-            </p>
-            {legSummary.longestLeg && (
-              <p>
-                Longest leg: ~{Math.round(legSummary.longestLeg.durationSeconds / 60)} min ·{" "}
-                {(legSummary.longestLeg.distanceMeters / 1000).toFixed(1)} km.
-              </p>
-            )}
-            {legSummary.currentOrderTitles.length > 0 && (
-              <p>Current order: {legSummary.currentOrderTitles.join(" → ")}</p>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── RouteQualityDiagnosticNote ───────────────────────────────────────────────
-// Read-only route-readiness affordance (PR #526 diagnostic). Fetches only on
-// explicit click — never on render, day switch, or itinerary refresh. Renders
-// deterministic, honest copy; makes no LLM/route-estimate/mutation calls.
-
-function describeExcludedStops(excludedStops: ExcludedStopSummary[]): string | null {
-  if (!excludedStops || excludedStops.length === 0) return null;
-  const label = (itemType: string) =>
-    itemType === "flight" ? "Flights" : itemType === "hotel" ? "Hotels" : `${itemType}s`;
-  const labels = [...new Set(excludedStops.map((s) => s.itemType))].map(label);
-  const joined =
-    labels.length === 1
-      ? labels[0]
-      : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
-  return `${joined} excluded from route planning v1.`;
-}
-
-function describeRouteQualityDiagnostic(diagnostic: RouteQualityDiagnosticResponse): string[] {
-  const lines: string[] = [];
-  if (diagnostic.status === "disabled") {
-    lines.push("Route readiness review isn't turned on for this trip yet.");
-  } else if (diagnostic.status === "insufficient_stops") {
-    const count = diagnostic.eligibleStopCount;
-    lines.push(
-      `Only ${count} eligible stop${count === 1 ? "" : "s"} found. Add more stops with locations to review route order.`
-    );
-  } else if (diagnostic.status === "missing_coordinates") {
-    lines.push(
-      `${diagnostic.locatedStopCount} of ${diagnostic.eligibleStopCount} stops have location data. Add locations before route planning.`
-    );
-    lines.push("No route travel-time data is available yet; no travel times are estimated here.");
-  } else if (diagnostic.status === "ready") {
-    lines.push("This day is ready for route review.");
-    lines.push("No route travel-time data is available yet; no travel times are estimated here.");
-  }
-  const excludedNote = describeExcludedStops(diagnostic.excludedStops);
-  if (excludedNote) lines.push(excludedNote);
-  return lines;
-}
-
-function RouteQualityDiagnosticNote({ tripId, dayId }: { tripId: string; dayId: string }) {
-  const [diagnostic, setDiagnostic] = useState<RouteQualityDiagnosticResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [errored, setErrored] = useState(false);
-
-  const handleCheck = async () => {
-    setLoading(true);
-    setErrored(false);
-    try {
-      const result = await fetchRouteQualityDiagnostic(tripId, dayId);
-      setDiagnostic(result);
-    } catch {
-      setErrored(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!diagnostic) {
-    return (
-      <div className="mt-1" data-testid="route-quality-diagnostic">
-        <button
-          type="button"
-          onClick={handleCheck}
-          disabled={loading}
-          data-testid="route-quality-diagnostic-btn"
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-ds-bone hover:bg-ds-linen text-ds-folio-ink-mist hover:text-ds-folio-ink border border-ds-hairline text-[11px] font-medium transition-colors duration-[120ms] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ds-marine-ink focus-visible:outline-offset-2 min-h-[36px]"
-        >
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Info className="w-3 h-3" />}
-          Check route readiness
-        </button>
-        {errored && (
-          <p className="text-[10px] text-ds-folio-ink-mist mt-1">
-            Route readiness check didn&apos;t load. Try again.
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      data-testid="route-quality-diagnostic-result"
-      className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg bg-ds-linen border border-ds-hairline mt-1"
-    >
-      <Info className="w-3 h-3 text-ds-folio-ink-mist flex-shrink-0 mt-px" aria-hidden="true" />
-      <div className="text-[10px] text-ds-folio-ink-mist leading-tight space-y-0.5">
-        {describeRouteQualityDiagnostic(diagnostic).map((line, i) => (
-          <p key={i}>{line}</p>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1222,8 +983,6 @@ export function ItineraryDayColumn({
 
           {visibleItems.length >= 2 && <DayTravelHintBar items={visibleItems} />}
           <RouteReadinessStatus items={visibleItems} />
-          <RouteQualityDiagnosticNote tripId={day.tripId} dayId={day.id} />
-          <DayFlowReview items={visibleItems} routeLegs={routeLegs} />
           {/* No proposal source exists in this PR (PR C is the apply
               contract only) — proposal is always null, so this affordance
               never renders in the running app. */}
