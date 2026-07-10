@@ -54,6 +54,20 @@ Full frontend suite: 3931/3945 pass (same 14 pre-existing failures as `main`,
 confirmed via `git stash` diff — zero new failures). `tsc --noEmit` clean;
 `next lint` clean on touched files.
 
+**Failure-seam / reproduction evidence** (this PR mentions "production"/
+"provider" only in the audit narrative and the template's SQL/env/providers
+checklist, not as a live runtime incident — no provider/runtime code path was
+touched): the exact boundary for bug 1 is `TripBuilder.tsx::handleAddResult`
+(reproduction: add any `ResearchResult` with `metadata.lat`/`metadata.lng` set
+— e.g. a hotel from `mapHotelToResult` — the created item had no `details` at
+all before this fix); the exact boundary for bug 2 is
+`tripItemMetadata.ts::readNumber` (reproduction: a details blob with
+`lat: 999` read as routeable before this fix, contradicting the backend
+`route_quality_diagnostic.py::_read_number` port). Both boundaries are covered
+by name in `itinerary-coordinate-parity-hardening-pr-e.test.mjs` (test names:
+"handleAddResult now builds additionalDetails from result.metadata..." and
+"readNumber now also rejects out-of-range values...").
+
 ### AI Route Planning v1 — PR C: explicit user-approved reorder-proposal apply contract (merged)
 
 Turns a proposed one-day reorder into a write **only** after an explicit user
