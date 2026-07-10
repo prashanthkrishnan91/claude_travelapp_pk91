@@ -185,6 +185,9 @@ export interface RouteQualityDiagnosticResponse {
 export interface ReorderProposal {
   currentOrder: string[];
   proposedOrder: string[];
+  /** Short plain-English reason for the suggested change, if any. */
+  rationale?: string;
+  moveReasons?: Record<string, string>;
 }
 
 export type RouteReorderApplyStatus = "disabled" | "rejected" | "applied";
@@ -195,6 +198,23 @@ export interface RouteReorderApplyResponse {
   message: string;
   dayId: string;
   order: string[];
+}
+
+// ─── Route Reorder Proposal — AI generation (AI Route Planning v1) ───────────
+// Triggered only by an explicit "Plan My Day" click. Read-only — generation
+// never writes; applying a proposal reuses RouteReorderApplyResponse above.
+
+export type RouteReorderProposalGenerateStatus = "disabled" | "unavailable" | "success";
+
+export interface RouteReorderProposalGenerateResponse {
+  status: RouteReorderProposalGenerateStatus;
+  reason: string;
+  message: string;
+  dayId: string;
+  currentOrder: string[];
+  proposedOrder: string[];
+  rationale: string;
+  moveReasons: Record<string, string>;
 }
 
 // ─── Travel Card ─────────────────────────────────────────────────────────────

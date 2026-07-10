@@ -1,8 +1,43 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-10 (remove-itinerary-diagnostics, this branch)
+Last updated: 2026-07-10 (ai-route-planning-flow, this branch)
 
-### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (this branch)
+### AI Route Planning v1 — real user flow shipped, triggered from "Plan My Day" (this branch)
+
+First PR to deliver the actual AI route-planning **user outcome** (prior PRs
+#525–#530 were foundation/diagnostic-only; PR #532 then removed the
+debug-feeling "Review day flow"/"Check route readiness" UI those PRs added).
+When a user clicks the existing "Plan My Day" button on a day that already
+has ≥2 routeable (activity/meal, located) stops, the existing result modal
+(`DayPlanModal`) now also shows a "Here is a more practical order for this
+day" section: current order, AI-suggested order, a short plain-English
+rationale, and Cancel/"Apply this order" controls — reusing
+`ReorderProposalPreview` (extracted to its own file,
+`components/trips/ReorderProposalPreview.tsx`, previously an inert
+`proposal={null}` render inside `ItineraryDayColumn.tsx`, now removed from
+there). Confirming calls the existing PR #528 apply endpoint
+(`/route-reorder-proposal/apply`); nothing is written during preview or on
+cancel. Applying refreshes the day's local item order; the existing inline
+route connectors remain the canonical travel-time display, unchanged.
+
+Backend: new read-only `POST /itinerary/{trip_id}/days/{day_id}/route-reorder-proposal/generate`
+endpoint (`route_reorder_proposal_generate.py`, new flag
+`ai_route_reorder_proposal_v1_enabled`, default off) — verifies ownership +
+exact day membership, rejects <2 routeable stops or a stale current_order
+before any route-data/LLM work, reuses the existing `compute_route_estimate`
+Google Routes service (single call, current order preserved) and the
+existing `anthropic` REASONING provider (lazy-import/env-key/fail-closed,
+same pattern as `batched_reason_builder.py` — no new provider/model
+authority). The LLM only reorders eligible (activity/meal, located) stops;
+every other item (flight/hotel/note/transit, or an eligible stop missing
+coordinates) keeps its exact original slot. A generated proposal is
+validated server-side (exact item-set match, fixed-time/`start_time`
+relative order preserved, no "optimal"/"perfect" claim) before being
+returned — an invalid generation fails closed to `status="unavailable"`,
+never a guessed or silently-repaired order. No SQL. Visual proof:
+`docs/visual-proof/ai-route-planning-v1/`.
+
+### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (PR #532)
 
 `RouteQualityDiagnosticNote` ("Check route readiness", PR B) and `DayFlowReview`
 ("Review day flow", PR D) are **no longer rendered** in `ItineraryDayColumn.tsx`

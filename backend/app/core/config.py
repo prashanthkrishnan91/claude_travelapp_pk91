@@ -86,6 +86,16 @@ class Settings(BaseSettings):
     # field.
     route_reorder_proposal_v1_enabled: bool = False
 
+    # AI Route Planning v1 — proposal generation triggered from "Plan My Day".
+    # Default False. Rollback: set AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED=false
+    # or omit. Gates the read-only /route-reorder-proposal/generate endpoint
+    # only — the apply write path stays governed by
+    # route_reorder_proposal_v1_enabled above. Requires ANTHROPIC_API_KEY
+    # (existing REASONING provider) and google_routes_api_key (existing
+    # ROUTE_MATRIX provider); missing either fails closed to "unavailable",
+    # never a guess.
+    ai_route_reorder_proposal_v1_enabled: bool = False
+
     # Cost-control guardrails for expensive AI/search routes
     guardrail_ai_concierge_requests: int = 6
     guardrail_ai_concierge_window_seconds: int = 60

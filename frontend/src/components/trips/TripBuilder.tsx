@@ -58,6 +58,7 @@ import type {
   AttractionSearchResult,
   RestaurantSearchResult,
   DayPlan,
+  RouteReorderProposalGenerateResponse,
 } from "@/types";
 import {
   createDay,
@@ -75,8 +76,10 @@ import {
   addRestaurantToDay,
   addHotelToDay,
   fetchExploreSnapshot,
+  generateRouteReorderProposal,
 } from "@/lib/api";
 import { deriveHotelStayDisplay, readHotelCheckOut } from "@/lib/hotelStaySpans";
+import { getRouteableStopsForEstimate } from "@/lib/travelHints";
 import { buildTripCandidateBuckets, mergePersistedWithSnapshot } from "@/lib/tripCandidates";
 import { extractRouteableTripItemMetadata } from "@/lib/tripItemMetadata";
 import { SearchResultCard } from "./SearchResultCard";
@@ -1316,6 +1319,11 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const [dayPlanLoading,     setDayPlanLoading]     = useState(false);
   const [dayPlanTargetDayId, setDayPlanTargetDayId] = useState<string | null>(null);
 
+  // ── AI route-planning suggestion state (surfaced inside the Plan My Day
+  // result modal, generated only by that same explicit click) ────────────────
+  const [routeReorderProposal,        setRouteReorderProposal]        = useState<RouteReorderProposalGenerateResponse | null>(null);
+  const [routeReorderProposalLoading, setRouteReorderProposalLoading] = useState(false);
+
   // ── Add Note modal state ─────────────────────────────────────────────────────
   const [addNoteTargetDayId, setAddNoteTargetDayId] = useState<string | null>(null);
 
@@ -1934,15 +1942,52 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
   const handlePlanDay = useCallback(async (dayId: string, dayNumber: number) => {
     setDayPlanTargetDayId(dayId);
     setDayPlanLoading(true);
-    try {
-      const plan = await fetchDayPlan(tripId, dayNumber);
-      setDayPlan(plan);
-    } catch {
-      showToast("Failed to generate day plan — please try again");
-    } finally {
-      setDayPlanLoading(false);
-    }
-  }, [tripId, showToast]);
+    setRouteReorderProposal(null);
+
+    const planPromise = fetchDayPlan(tripId, dayNumber)
+      .then(setDayPlan)
+      .catch(() => showToast("Failed to generate day plan — please try again"))
+      .finally(() => setDayPlanLoading(false));
+
+    // AI route-planning suggestion: only for a day that already has ≥2
+    // routeable (activity/meal, located) stops already in the itinerary.
+    // Explicit-trigger only — this fires from the same click as Plan My
+    // Day, never on render/day-switch/refresh.
+    const targetDay = days.find((d) => d.id === dayId);
+    const routableStops = targetDay ? getRouteableStopsForEstimate(targetDay.items) : [];
+    const routePromise =
+      targetDay && routableStops.length >= 2
+        ? (() => {
+            setRouteReorderProposalLoading(true);
+            const currentOrder = targetDay.items.map((item) => item.id);
+            return generateRouteReorderProposal(tripId, dayId, currentOrder)
+              .then(setRouteReorderProposal)
+              .catch(() => setRouteReorderProposal(null))
+              .finally(() => setRouteReorderProposalLoading(false));
+          })()
+        : Promise.resolve();
+
+    await Promise.all([planPromise, routePromise]);
+  }, [tripId, showToast, days]);
+
+  const handleRouteProposalApplied = useCallback((order: string[]) => {
+    const dayId = dayPlanTargetDayId;
+    if (!dayId) return;
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.id !== dayId) return d;
+        const byId = new Map(d.items.map((item) => [item.id, item]));
+        const reordered = order
+          .map((itemId, index) => {
+            const item = byId.get(itemId);
+            return item ? { ...item, position: index } : null;
+          })
+          .filter((item): item is ItineraryItem => item !== null);
+        return reordered.length === d.items.length ? { ...d, items: reordered } : d;
+      })
+    );
+    setRouteReorderProposal(null);
+  }, [dayPlanTargetDayId]);
 
   const handlePlanAddAttraction = useCallback(async (attraction: AttractionSearchResult) => {
     if (!dayPlanTargetDayId) return;
@@ -2807,9 +2852,15 @@ export function TripBuilder({ tripId, destination, startDate, endDate, initialDa
       {dayPlan && (
         <DayPlanModal
           plan={dayPlan}
-          onClose={() => setDayPlan(null)}
+          onClose={() => { setDayPlan(null); setRouteReorderProposal(null); }}
           onAddAttraction={handlePlanAddAttraction}
           onAddRestaurant={handlePlanAddRestaurant}
+          tripId={tripId}
+          dayId={dayPlanTargetDayId ?? undefined}
+          dayItems={days.find((d) => d.id === dayPlanTargetDayId)?.items}
+          routeProposal={routeReorderProposal}
+          routeProposalLoading={routeReorderProposalLoading}
+          onRouteProposalApplied={handleRouteProposalApplied}
         />
       )}
 

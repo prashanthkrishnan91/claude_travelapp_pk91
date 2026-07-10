@@ -11,14 +11,121 @@ import {
   Sparkles,
   UtensilsCrossed,
   Plus,
+  Route,
 } from "lucide-react";
-import type { DayPlan, AttractionSearchResult, RestaurantSearchResult } from "@/types";
+import type {
+  DayPlan,
+  AttractionSearchResult,
+  RestaurantSearchResult,
+  ItineraryItem,
+  ReorderProposal,
+  RouteReorderProposalGenerateResponse,
+} from "@/types";
+import { ReorderProposalPreview } from "./ReorderProposalPreview";
 
 interface DayPlanModalProps {
   plan: DayPlan;
   onClose: () => void;
   onAddAttraction: (attraction: AttractionSearchResult) => Promise<void>;
   onAddRestaurant: (restaurant: RestaurantSearchResult) => Promise<void>;
+  /** AI route-planning suggestion for this day's existing stops (optional —
+   * only present when the day already had ≥2 routeable stops when Plan My
+   * Day was clicked). Read-only until the user explicitly confirms. */
+  tripId?: string;
+  dayId?: string;
+  dayItems?: ItineraryItem[];
+  routeProposal?: RouteReorderProposalGenerateResponse | null;
+  routeProposalLoading?: boolean;
+  onRouteProposalApplied?: (order: string[]) => void;
+}
+
+// ─── AI route suggestion section ──────────────────────────────────────────
+// Reuses the existing ReorderProposalPreview (apply contract from PR #528).
+// Shown only when the day already had ≥2 routeable stops at generation
+// time — never a new panel/page/dashboard, just a section of this existing
+// result surface.
+
+function RouteSuggestionSection({
+  tripId,
+  dayId,
+  dayItems,
+  routeProposal,
+  routeProposalLoading,
+  onApplied,
+}: {
+  tripId?: string;
+  dayId?: string;
+  dayItems?: ItineraryItem[];
+  routeProposal?: RouteReorderProposalGenerateResponse | null;
+  routeProposalLoading?: boolean;
+  onApplied?: (order: string[]) => void;
+}) {
+  if (!tripId || !dayId || !dayItems) return null;
+
+  if (routeProposalLoading) {
+    return (
+      <div
+        data-testid="route-suggestion-loading"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-ds-hairline bg-ds-linen text-xs text-ds-folio-ink-mist"
+      >
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Checking for a more practical order for this day&apos;s stops&hellip;
+      </div>
+    );
+  }
+
+  if (!routeProposal || routeProposal.status === "disabled") return null;
+
+  if (routeProposal.status === "unavailable") {
+    return (
+      <div
+        data-testid="route-suggestion-unavailable"
+        className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-ds-hairline bg-ds-linen text-xs text-ds-folio-ink-mist"
+      >
+        <Route className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+        <span>{routeProposal.message}</span>
+      </div>
+    );
+  }
+
+  if (routeProposal.proposedOrder.join(",") === routeProposal.currentOrder.join(",")) {
+    return (
+      <div
+        data-testid="route-suggestion-already-practical"
+        className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-ds-hairline bg-ds-linen text-xs text-ds-folio-ink-mist"
+      >
+        <Route className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+        <span>This day&apos;s order already looks practical{routeProposal.rationale ? ` — ${routeProposal.rationale}` : "."}</span>
+      </div>
+    );
+  }
+
+  const proposal: ReorderProposal = {
+    currentOrder: routeProposal.currentOrder,
+    proposedOrder: routeProposal.proposedOrder,
+    rationale: routeProposal.rationale,
+    moveReasons: routeProposal.moveReasons,
+  };
+
+  return (
+    <div data-testid="route-suggestion-section" className="rounded-xl border border-ds-hairline overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3 pt-2.5">
+        <Route className="w-3.5 h-3.5 text-ds-marine-ink" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ds-folio-ink-mist">
+          Here is a more practical order for this day
+        </span>
+      </div>
+      <div className="px-2.5 pb-2.5">
+        <ReorderProposalPreview
+          tripId={tripId}
+          dayId={dayId}
+          items={dayItems}
+          proposal={proposal}
+          onApplied={onApplied}
+        />
+      </div>
+    </div>
+  );
 }
 
 function formatDuration(minutes: number): string {
@@ -32,6 +139,12 @@ export function DayPlanModal({
   onClose,
   onAddAttraction,
   onAddRestaurant,
+  tripId,
+  dayId,
+  dayItems,
+  routeProposal,
+  routeProposalLoading,
+  onRouteProposalApplied,
 }: DayPlanModalProps) {
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -102,6 +215,16 @@ export function DayPlanModal({
 
         {/* Body — scrollable recommendation slips */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+
+          {/* AI route suggestion for this day's existing stops */}
+          <RouteSuggestionSection
+            tripId={tripId}
+            dayId={dayId}
+            dayItems={dayItems}
+            routeProposal={routeProposal}
+            routeProposalLoading={routeProposalLoading}
+            onApplied={onRouteProposalApplied}
+          />
 
           {/* Attractions */}
           <div>
