@@ -178,6 +178,67 @@ test("inline connector matches a Google leg by exact fromItemId/toItemId pair, n
 });
 
 // ---------------------------------------------------------------------------
+// 10. Local/haversine estimates are never presented as provider route timing
+//     (PR #531 audit-blocker fix). Only a Google Routes leg may render a
+//     minute/km figure; absent that, the connector shows a neutral
+//     "Route time unavailable" state with no fabricated duration/distance.
+// ---------------------------------------------------------------------------
+
+function getConnectorBranches(src) {
+  const fnMatch = src.match(/function renderItemsWithConnectors[\s\S]*?\n\}\n/);
+  assert.ok(fnMatch, "renderItemsWithConnectors must exist");
+  return fnMatch[0];
+}
+
+test("no-Google-leg branches never render est.walkMinutes/driveMinutes/distanceKm", () => {
+  const fn = getConnectorBranches(dayColumnSrc);
+  // Split off the googleLeg-present branch (the only place a provider figure may render).
+  const googleBranchEnd = fn.indexOf("} else if (hint.kind === \"far_apart\")");
+  assert.ok(googleBranchEnd > 0, "must find the boundary after the googleLeg branch");
+  const nonGoogleBranches = fn.slice(googleBranchEnd);
+  assert.doesNotMatch(
+    nonGoogleBranches,
+    /est\.walkMinutes|est\.driveMinutes|est\.distanceKm/,
+    "local/haversine estimate fields must never be read once there is no Google Routes leg for the pair",
+  );
+});
+
+test('far_apart branch without a Google leg renders "Route time unavailable", not a minute/km figure', () => {
+  const fn = getConnectorBranches(dayColumnSrc);
+  const farApartBranch = fn.match(/\} else if \(hint\.kind === "far_apart"\) \{([\s\S]*?)\} else \{/);
+  assert.ok(farApartBranch, "must find the far_apart branch");
+  assert.match(farApartBranch[1], /Route time unavailable/);
+  assert.doesNotMatch(farApartBranch[1], /min walk|min drive|\{est\./, "must not render a fabricated duration/distance");
+});
+
+test('travel_ok branch without a Google leg renders "Route time unavailable", not a minute/km figure', () => {
+  const fn = getConnectorBranches(dayColumnSrc);
+  // The final else branch (travel_ok, no Google leg) runs from "} else {" after far_apart to the closing of the if-chain.
+  const lastElseMatch = fn.match(/\} else \{\s*\/\/ travel_ok, but no Google Routes leg[\s\S]*?\n {6}\}\n {4}\}/);
+  assert.ok(lastElseMatch, "must find the travel_ok-no-leg branch");
+  assert.match(lastElseMatch[0], /Route time unavailable/);
+  assert.doesNotMatch(lastElseMatch[0], /min walk|min drive|\{est\./, "must not render a fabricated duration/distance");
+});
+
+test('non-Google connector states use a distinct data-testid ("route-connector-unavailable")', () => {
+  assert.match(dayColumnSrc, /data-testid="route-connector-unavailable"/);
+});
+
+test("route-connector-unavailable testid never appears inside the googleLeg branch", () => {
+  const fn = getConnectorBranches(dayColumnSrc);
+  const googleBranch = fn.match(/if \(googleLeg\) \{([\s\S]*?)\} else if \(hint\.kind === "far_apart"\)/);
+  assert.ok(googleBranch);
+  assert.doesNotMatch(googleBranch[1], /route-connector-unavailable/);
+});
+
+test("missing_location connector copy is unchanged (still honest, no route figure)", () => {
+  assert.match(
+    dayColumnSrc,
+    /hint\.kind === "missing_location"[\s\S]{0,300}?Add location details to improve travel hints|hint\.label/,
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 8. No new route-estimate call site was added
 // ---------------------------------------------------------------------------
 
