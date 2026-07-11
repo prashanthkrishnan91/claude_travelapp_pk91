@@ -1,6 +1,6 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-10 (ai-route-planning-flow, this branch)
+Last updated: 2026-07-11 (ai-route-planning-flow, this branch)
 
 ### AI Route Planning v1 — real user flow shipped, triggered from "Plan My Day" (this branch)
 
@@ -73,6 +73,38 @@ flow requires all of:** `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED=true`,
 `ANTHROPIC_API_KEY`, `GOOGLE_ROUTES_API_KEY` — any missing piece fails
 closed to `disabled`/`unavailable` before any expensive work, never a
 guess.
+
+**Patch 2 (same PR #533): day-part sections (Morning/Afternoon/Evening/
+Unscheduled) — the same sections `ItineraryDayColumn` renders — are now
+hard boundaries.** A routeable stop may only be reordered among other
+stops in its own rendered day-part section; it can never cross into
+another. `_get_item_day_part` in `route_reorder_proposal_generate.py`
+ports `getItemDayPart` from `ItineraryDayColumn.tsx` exactly (explicit
+`details.dayPart` → `details.timeLabel` keywords → canonical `start_time`
+hour bucketing → unscheduled), so the split never drifts from what's
+actually rendered. This is validated deterministically after generation
+(`_day_part_boundaries_respected`) — the LLM is never trusted to honor it
+merely because the prompt says so. Both Google Routes calls (current order
+and, if it changed, the proposed order) now use this canonical
+Morning→Afternoon→Evening→Unscheduled stop sequence, not raw database
+position order — the same sequence shown in the preview. Fixed-time
+anchors still work exactly as before, now composing with day-part
+boundaries (an anchor can't be used to smuggle a stop across a section).
+
+New response fields `current_display_order`/`proposed_display_order`
+(every day item, not just movable ones, bucketed into canonical section
+order) are what the frontend preview (`ReorderProposalPreview`) now
+renders — `current_order`/`proposed_order` are unchanged in shape from PR C
+(the full day's items in raw position order) and remain exactly what the
+existing apply endpoint (#528) requires; display order is never sent to
+apply. `_splice_movable_order` was rewritten to correctly map a
+canonical-order accepted sequence back onto each bucket's original
+raw-position slots (previously the mapping assumed the proposed sequence
+was already in raw-position order, which broke once canonical bucket order
+could differ from it). No SQL, no new provider, no extra LLM/route call
+(still capped at two Google Routes calls + one LLM call), no change to the
+Plan My Day trigger, modal structure, apply endpoint, or material-
+improvement thresholds.
 
 ### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (PR #532)
 

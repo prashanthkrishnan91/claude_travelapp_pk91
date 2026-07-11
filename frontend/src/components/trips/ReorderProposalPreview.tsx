@@ -40,6 +40,13 @@ export function ReorderProposalPreview({
   const titleFor = (itemId: string) =>
     items.find((item) => item.id === itemId)?.title ?? "Untitled stop";
 
+  // Display order (e.g. canonical Morning/Afternoon/Evening/Unscheduled
+  // section order) is shown when supplied, so the preview always matches
+  // the visible itinerary — but apply always sends currentOrder/
+  // proposedOrder (raw position order), never these.
+  const displayedCurrentOrder = proposal.currentDisplayOrder ?? proposal.currentOrder;
+  const displayedProposedOrder = proposal.proposedDisplayOrder ?? proposal.proposedOrder;
+
   const handleCancel = () => {
     if (applying) return;
     setDismissed(true);
@@ -86,7 +93,7 @@ export function ReorderProposalPreview({
         <div data-testid="reorder-proposal-current">
           <p className="text-[10px] font-medium text-ds-folio-ink">Current order</p>
           <ol className="text-[10px] text-ds-folio-ink-mist list-decimal list-inside">
-            {proposal.currentOrder.map((itemId) => (
+            {displayedCurrentOrder.map((itemId) => (
               <li key={itemId}>{titleFor(itemId)}</li>
             ))}
           </ol>
@@ -94,7 +101,7 @@ export function ReorderProposalPreview({
         <div data-testid="reorder-proposal-proposed">
           <p className="text-[10px] font-medium text-ds-folio-ink">Proposed order</p>
           <ol className="text-[10px] text-ds-folio-ink-mist list-decimal list-inside">
-            {proposal.proposedOrder.map((itemId) => (
+            {displayedProposedOrder.map((itemId) => (
               <li key={itemId}>{titleFor(itemId)}</li>
             ))}
           </ol>

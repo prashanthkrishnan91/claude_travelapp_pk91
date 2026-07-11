@@ -41,6 +41,23 @@ this PR (proven further by `backend/tests` and `frontend/tests/ai-route-planning
 7. `7-current-order-already-practical.png` — a routed proposal that did **not** clear the
    improvement threshold: only the deterministic "This day's order already looks practical…"
    message renders, with no current/proposed order lists and no Apply action.
+8. `8-day-part-current-sections.png` — a 5-stop day with a non-routeable flight interleaved in
+   raw persisted order between two morning stops and three afternoon stops (`City History
+   Museum`, `Morning Pastry Stop` morning; `Flight to Lyon`, `Riverside Park Walk`, `Afternoon
+   Bistro Lunch` afternoon). `ItineraryDayColumn`'s own Morning/Afternoon section headers (real,
+   unmodified component) group them correctly — the same grouping the generate endpoint's
+   `current_display_order` now mirrors.
+9. `9-day-part-proposed-order.png` — the "Current order"/"Proposed order" preview lists use
+   this **canonical day-part display order** (Morning stops, then the afternoon-classified
+   flight, then the remaining afternoon stops) — not raw database position order. Only the two
+   morning stops are swapped in "Proposed order"; the flight and both other afternoon stops stay
+   in the exact same relative order in both columns, proving the boundary was respected.
+10. `10-day-part-applied-matches-preview.png` — after applying: the Morning section now shows
+    `Morning Pastry Stop` before `City History Museum` (the accepted swap), and the Afternoon
+    section is byte-for-byte unchanged — the rendered itinerary matches the preview exactly, and
+    no item crossed a day-part boundary.
+11. `11-day-part-mobile.png` — the same day-part-aware proposal preview at a 390px mobile
+    viewport.
 
 ## What this proves
 
@@ -56,3 +73,7 @@ this PR (proven further by `backend/tests` and `frontend/tests/ai-route-planning
 - Excluded items (flights/hotels/notes, or stops missing coordinates) are not part of the
   reorder, and fixed-time stops are treated as anchors that untimed stops cannot cross —
   proven server-side by `backend/tests/test_route_reorder_proposal_generate.py`.
+- Day-part sections (Morning/Afternoon/Evening/Unscheduled) — the same sections
+  `ItineraryDayColumn` renders — are hard boundaries: a stop can only be reordered among other
+  stops in its own section, and the preview's current/proposed lists always match that same
+  rendered section order, never raw database position order.

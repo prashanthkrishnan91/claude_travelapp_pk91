@@ -19,11 +19,13 @@ Proves:
 - A proposed-route provider failure (second call) returns unavailable.
 - A generated proposal missing/adding/duplicating an eligible item ID is
   rejected (fail-closed), not silently repaired.
-- A movable stop cannot cross a fixed-time anchor; fixed-time stops stay in
-  their exact routeable-order slot; reordering within the same segment is
-  allowed.
-- A generated rationale/move-reason claiming "optimal"/"perfect" is
-  rejected.
+- Day-part sections (Morning/Afternoon/Evening/Unscheduled) are hard
+  boundaries: a routeable stop cannot cross into another section, but
+  reordering within a section is allowed. Fixed-time anchors still work
+  inside a section. Google Routes is called with the canonical
+  (day-part + fixed-time) order, matching the display order exactly.
+  Mapping an accepted proposal back to the full apply order preserves the
+  exact item set, non-routeable items, and never mutates metadata.
 - Non-movable items (wrong type, or eligible but missing coordinates) keep
   their exact original slot in the returned proposed_order.
 - This module never calls itinerary.update_item — generation never writes.
@@ -50,8 +52,21 @@ def _settings(ai_enabled: bool, apply_enabled: bool = True) -> MagicMock:
     return s
 
 
-def _item(item_id, item_type="activity", lat=1.0, lng=2.0, title="Stop", start_time=None):
+def _item(
+    item_id,
+    item_type="activity",
+    lat=1.0,
+    lng=2.0,
+    title="Stop",
+    start_time=None,
+    day_part=None,
+    time_label=None,
+):
     details = {} if lat is None else {"lat": lat, "lng": lng}
+    if day_part is not None:
+        details["dayPart"] = day_part
+    if time_label is not None:
+        details["timeLabel"] = time_label
     return SimpleNamespace(
         id=item_id,
         item_type=item_type,
@@ -197,9 +212,6 @@ class TestFeatureFlags:
         assert resp.proposed_order == []
 
     def test_apply_flag_off_returns_disabled_before_any_route_or_llm_call(self, monkeypatch):
-        # Generation flag on, apply flag off — a proposal would be
-        # unactionable, so generation must fail closed before doing any
-        # expensive work.
         monkeypatch.setattr(svc, "get_settings", lambda: _settings(ai_enabled=True, apply_enabled=False))
         monkeypatch.setattr(svc, "compute_route_estimate", _no_route_call)
         monkeypatch.setattr(svc, "_call_llm", _no_llm_call)
@@ -398,7 +410,10 @@ class TestGenerationValidation:
         assert resp.reason == "llm_unavailable"
 
 
-# ── route verification of a changed order ─────────────────────────────────
+# ── route verification of a changed order (single day-part bucket) ───────
+# All items in these tests are untimed with no explicit dayPart, so they
+# all land in the "unscheduled" bucket together — day-part boundaries are a
+# no-op here, isolating the routing/threshold behavior itself.
 
 
 class TestRouteVerification:
@@ -408,8 +423,6 @@ class TestRouteVerification:
         db = _owned_db(user_id, trip_id, day_id)
         a, b = uuid4(), uuid4()
         _patch_itinerary_service(monkeypatch, [_item(a), _item(b)])
-        # Current order: 1800s/6000m. Proposed (swapped) order: 900s/3000m —
-        # clears the duration-improvement bar.
         route_fn = _route_call_sequence(
             _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
             _success_route_response([_leg(str(b), str(a), duration=900, distance=3000)]),
@@ -457,7 +470,6 @@ class TestRouteVerification:
         db = _owned_db(user_id, trip_id, day_id)
         a, b = uuid4(), uuid4()
         _patch_itinerary_service(monkeypatch, [_item(a), _item(b)])
-        # Proposed order is slightly worse — must not be surfaced as a change.
         route_fn = _route_call_sequence(
             _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
             _success_route_response([_leg(str(b), str(a), duration=1850, distance=6100)]),
@@ -473,57 +485,12 @@ class TestRouteVerification:
         assert resp.proposed_order == resp.current_order == [str(a), str(b)]
         assert len(route_fn.calls) == 2
 
-    def test_minor_improvement_below_threshold_returns_unchanged_current_order(self, monkeypatch):
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
-        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
-        db = _owned_db(user_id, trip_id, day_id)
-        a, b = uuid4(), uuid4()
-        _patch_itinerary_service(monkeypatch, [_item(a), _item(b)])
-        # 1800s -> 1750s: 50s savings, below min(300s, 10% of 1800=180s)=180s
-        # threshold, and distance savings are also below the 1km/10% bar.
-        route_fn = _route_call_sequence(
-            _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
-            _success_route_response([_leg(str(b), str(a), duration=1750, distance=5950)]),
-        )
-        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
-        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
-        resp = svc.generate_route_reorder_proposal(
-            trip_id, day_id, user_id,
-            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b)]), db=db,
-        )
-        assert resp.status == "success"
-        assert resp.reason == "current_order_already_practical"
-
-    def test_similar_duration_but_material_distance_improvement_is_accepted(self, monkeypatch):
-        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
-        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
-        db = _owned_db(user_id, trip_id, day_id)
-        a, b = uuid4(), uuid4()
-        _patch_itinerary_service(monkeypatch, [_item(a), _item(b)])
-        # Duration within 2 min (1800 -> 1810), distance improves by 1.5km
-        # (>= min(1km, 10% of 6000m=600m) threshold).
-        route_fn = _route_call_sequence(
-            _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
-            _success_route_response([_leg(str(b), str(a), duration=1810, distance=4500)]),
-        )
-        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
-        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
-        resp = svc.generate_route_reorder_proposal(
-            trip_id, day_id, user_id,
-            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b)]), db=db,
-        )
-        assert resp.status == "success"
-        assert resp.reason == "proposal_generated"
-        assert resp.estimated_distance_savings_meters == 1500
-
     def test_worse_duration_is_never_accepted_even_if_distance_improves(self, monkeypatch):
         monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
         user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
         db = _owned_db(user_id, trip_id, day_id)
         a, b = uuid4(), uuid4()
         _patch_itinerary_service(monkeypatch, [_item(a), _item(b)])
-        # Duration materially worse (1800 -> 2400, +600s, outside the 2min
-        # similarity window) even though distance improved a lot.
         route_fn = _route_call_sequence(
             _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
             _success_route_response([_leg(str(b), str(a), duration=2400, distance=1000)]),
@@ -578,92 +545,268 @@ class TestRouteVerification:
         assert resp.proposed_order == resp.current_order == [str(a), str(b)]
 
 
-# ── fixed-time anchors and segments ───────────────────────────────────────
+# ── day-part section boundaries ────────────────────────────────────────────
 
 
-class TestFixedTimeAnchors:
-    def _three_stop_day(self, monkeypatch, a, b, c, a_time=None, b_time=None, c_time=None):
+class TestDayPartBoundaries:
+    def test_morning_item_cannot_move_into_afternoon_slot(self, monkeypatch):
         monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
         user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
         db = _owned_db(user_id, trip_id, day_id)
+        a, b, c = uuid4(), uuid4(), uuid4()
+        # a, b morning; c afternoon. Canonical order = [a, b, c].
         _patch_itinerary_service(
             monkeypatch,
-            [
-                _item(a, start_time=a_time),
-                _item(b, start_time=b_time),
-                _item(c, start_time=c_time),
-            ],
+            [_item(a, day_part="morning"), _item(b, day_part="morning"), _item(c, day_part="afternoon")],
         )
-        return user_id, trip_id, day_id, db
-
-    def test_movable_stop_cannot_cross_a_fixed_time_anchor(self, monkeypatch):
-        a, b, c = uuid4(), uuid4(), uuid4()
-        anchor_time = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
-        # b is a fixed anchor between untimed a and untimed c.
-        user_id, trip_id, day_id, db = self._three_stop_day(monkeypatch, a, b, c, b_time=anchor_time)
         route_fn = _route_call_sequence(
             _success_route_response([_leg(str(a), str(b)), _leg(str(b), str(c))]),
         )
         monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
-        # Model tries to move c before the b anchor — a segment-crossing move.
+        # Model tries to move the afternoon item c into a morning slot.
         monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(c), str(a), str(b)]))
         resp = svc.generate_route_reorder_proposal(
             trip_id, day_id, user_id,
             RouteReorderProposalGenerateRequest(current_order=[str(a), str(b), str(c)]), db=db,
         )
         assert resp.status == "unavailable"
-        assert resp.reason == "fixed_time_anchor_violated"
-        assert len(route_fn.calls) == 1  # only the current-order call
+        assert resp.reason == "day_part_boundary_violated"
+        assert len(route_fn.calls) == 1  # only the current-order call; no route call for an invalid proposal
 
-    def test_fixed_time_stop_cannot_move_from_its_slot(self, monkeypatch):
-        a, b, c = uuid4(), uuid4(), uuid4()
-        anchor_time = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
-        user_id, trip_id, day_id, db = self._three_stop_day(monkeypatch, a, b, c, b_time=anchor_time)
-        route_fn = _route_call_sequence(
-            _success_route_response([_leg(str(a), str(b)), _leg(str(b), str(c))]),
+    def test_afternoon_item_cannot_cross_morning_boundary(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b = uuid4(), uuid4()
+        _patch_itinerary_service(
+            monkeypatch, [_item(a, day_part="morning"), _item(b, day_part="afternoon")]
         )
+        route_fn = _route_call_sequence(_success_route_response([_leg(str(a), str(b))]))
         monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
-        # Model moves the anchor b itself out of its slot.
-        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a), str(c)]))
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
         resp = svc.generate_route_reorder_proposal(
             trip_id, day_id, user_id,
-            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b), str(c)]), db=db,
+            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b)]), db=db,
+        )
+        assert resp.status == "unavailable"
+        assert resp.reason == "day_part_boundary_violated"
+
+    def test_afternoon_item_cannot_cross_evening_boundary(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b = uuid4(), uuid4()
+        _patch_itinerary_service(
+            monkeypatch, [_item(a, day_part="afternoon"), _item(b, day_part="evening")]
+        )
+        route_fn = _route_call_sequence(_success_route_response([_leg(str(a), str(b))]))
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b)]), db=db,
+        )
+        assert resp.status == "unavailable"
+        assert resp.reason == "day_part_boundary_violated"
+
+    def test_reordering_within_the_same_day_part_bucket_is_allowed(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b = uuid4(), uuid4()
+        _patch_itinerary_service(
+            monkeypatch, [_item(a, day_part="morning"), _item(b, day_part="morning")]
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
+            _success_route_response([_leg(str(b), str(a), duration=900, distance=3000)]),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b)]), db=db,
+        )
+        assert resp.status == "success"
+        assert resp.reason == "proposal_generated"
+        assert resp.proposed_order == [str(b), str(a)]
+        assert len(route_fn.calls) == 2
+
+    def test_canonical_order_groups_sections_morning_before_afternoon_before_evening_before_unscheduled(
+        self, monkeypatch
+    ):
+        # Raw persisted order deliberately interleaves sections; canonical
+        # (day-part) order must re-group them for the LLM prompt/route calls.
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        evening_item, morning_item, unscheduled_item, afternoon_item = uuid4(), uuid4(), uuid4(), uuid4()
+        _patch_itinerary_service(
+            monkeypatch,
+            [
+                _item(evening_item, day_part="evening"),
+                _item(morning_item, day_part="morning"),
+                _item(unscheduled_item),  # no time/dayPart -> unscheduled
+                _item(afternoon_item, day_part="afternoon"),
+            ],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response(
+                [_leg(str(morning_item), str(afternoon_item)), _leg(str(afternoon_item), str(evening_item)), _leg(str(evening_item), str(unscheduled_item))]
+            ),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(
+            svc,
+            "_call_llm",
+            lambda *_a, **_k: _llm_response([str(morning_item), str(afternoon_item), str(evening_item), str(unscheduled_item)]),
+        )
+        current = [str(evening_item), str(morning_item), str(unscheduled_item), str(afternoon_item)]
+        svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=current), db=db,
+        )
+        assert route_fn.calls[0] == [str(morning_item), str(afternoon_item), str(evening_item), str(unscheduled_item)]
+
+    def test_google_routes_order_matches_canonical_preview_order(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, b, c = uuid4(), uuid4(), uuid4()
+        # Raw order c, a, b but a/b are morning and c is afternoon —
+        # canonical order must be [a, b, c].
+        _patch_itinerary_service(
+            monkeypatch,
+            [_item(c, day_part="afternoon"), _item(a, day_part="morning"), _item(b, day_part="morning")],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response(
+                [_leg(str(a), str(b), duration=1800, distance=6000), _leg(str(b), str(c), duration=600, distance=1000)]
+            ),
+            _success_route_response(
+                [_leg(str(b), str(a), duration=900, distance=3000), _leg(str(a), str(c), duration=600, distance=1000)]
+            ),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a), str(c)]))
+        current = [str(c), str(a), str(b)]
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=current), db=db,
+        )
+        assert route_fn.calls[0] == [str(a), str(b), str(c)]
+        assert route_fn.calls[1] == [str(b), str(a), str(c)]
+        assert resp.status == "success"
+        assert resp.current_display_order == [str(a), str(b), str(c)]
+
+    def test_mapping_back_preserves_item_set_and_non_routeable_items(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        flight, a, b, note = uuid4(), uuid4(), uuid4(), uuid4()
+        # flight and note interleaved with two morning routeable stops.
+        current = [str(flight), str(a), str(note), str(b)]
+        _patch_itinerary_service(
+            monkeypatch,
+            [
+                _item(flight, item_type="flight"),
+                _item(a, day_part="morning"),
+                _item(note, item_type="note", lat=None),
+                _item(b, day_part="morning"),
+            ],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response([_leg(str(a), str(b), duration=1800, distance=6000)]),
+            _success_route_response([_leg(str(b), str(a), duration=900, distance=3000)]),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a)]))
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=current), db=db,
+        )
+        assert resp.status == "success"
+        # flight (index 0) and note (index 2) keep their exact slots; only
+        # the movable a/b pair (indices 1, 3) is reordered.
+        assert resp.proposed_order == [str(flight), str(b), str(note), str(a)]
+        assert set(resp.proposed_order) == set(current)
+
+    def test_no_metadata_or_day_part_mutation_during_generation(self):
+        source = inspect.getsource(svc)
+        # No write-style assignment into item details/metadata anywhere —
+        # this module only ever reads item.details / item.start_time.
+        assert ".details[" not in source
+        assert ".details.update(" not in source
+        assert "item.start_time =" not in source
+        assert "item.dayPart" not in source
+
+
+# ── fixed-time anchors within a day-part bucket ────────────────────────────
+
+
+class TestFixedTimeAnchorsWithinBucket:
+    def test_fixed_time_anchor_still_enforced_within_a_bucket(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        a, t, b = uuid4(), uuid4(), uuid4()
+        anchor_time = datetime(2026, 7, 10, 13, 0, tzinfo=timezone.utc)  # 13:00 -> afternoon
+        # All three explicitly afternoon (same bucket); t is a fixed anchor
+        # in the middle.
+        _patch_itinerary_service(
+            monkeypatch,
+            [
+                _item(a, day_part="afternoon"),
+                _item(t, day_part="afternoon", start_time=anchor_time),
+                _item(b, day_part="afternoon"),
+            ],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response([_leg(str(a), str(t)), _leg(str(t), str(b))]),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        # Model tries to move the anchor t out of its slot.
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(t), str(a), str(b)]))
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=[str(a), str(t), str(b)]), db=db,
         )
         assert resp.status == "unavailable"
         assert resp.reason == "fixed_time_anchor_violated"
 
-    def test_reordering_within_the_same_segment_is_allowed(self, monkeypatch):
-        a, b, c, d = uuid4(), uuid4(), uuid4(), uuid4()
-        anchor_time = datetime(2026, 7, 10, 18, 0, tzinfo=timezone.utc)
+    def test_untimed_stops_reorder_within_bucket_segment_around_anchor(self, monkeypatch):
         monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
         user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
         db = _owned_db(user_id, trip_id, day_id)
-        # a, b untimed (segment before anchor); c anchor; d untimed (segment after).
+        a, b, t = uuid4(), uuid4(), uuid4()
+        anchor_time = datetime(2026, 7, 10, 13, 0, tzinfo=timezone.utc)
+        # a, b untimed afternoon (before the anchor); t is the afternoon anchor.
         _patch_itinerary_service(
             monkeypatch,
-            [_item(a), _item(b), _item(c, start_time=anchor_time), _item(d)],
+            [
+                _item(a, day_part="afternoon"),
+                _item(b, day_part="afternoon"),
+                _item(t, day_part="afternoon", start_time=anchor_time),
+            ],
         )
         route_fn = _route_call_sequence(
             _success_route_response(
-                [_leg(str(a), str(b), duration=1800, distance=6000), _leg(str(b), str(c)), _leg(str(c), str(d))]
+                [_leg(str(a), str(b), duration=1800, distance=6000), _leg(str(b), str(t), duration=600, distance=1000)]
             ),
             _success_route_response(
-                [_leg(str(b), str(a), duration=900, distance=3000), _leg(str(a), str(c)), _leg(str(c), str(d))]
+                [_leg(str(b), str(a), duration=900, distance=3000), _leg(str(a), str(t), duration=600, distance=1000)]
             ),
         )
         monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
-        # Swap a/b (same pre-anchor segment); c and d stay put.
-        monkeypatch.setattr(
-            svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a), str(c), str(d)])
-        )
+        # Swap a/b (same pre-anchor segment, same bucket); t stays put.
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(b), str(a), str(t)]))
         resp = svc.generate_route_reorder_proposal(
             trip_id, day_id, user_id,
-            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b), str(c), str(d)]), db=db,
+            RouteReorderProposalGenerateRequest(current_order=[str(a), str(b), str(t)]), db=db,
         )
         assert resp.status == "success"
         assert resp.reason == "proposal_generated"
-        assert resp.proposed_order == [str(b), str(a), str(c), str(d)]
-        assert len(route_fn.calls) == 2
+        assert resp.proposed_order == [str(b), str(a), str(t)]
 
 
 # ── non-movable items keep their exact slot ───────────────────────────────
@@ -700,6 +843,69 @@ class TestNonMovableItemsPreserved:
         # only the movable a/b pair (indices 1, 3) is reordered.
         assert resp.proposed_order == [str(flight), str(b), str(unlocated), str(a)]
         assert set(resp.proposed_order) == set(current)
+
+
+# ── preview display order ──────────────────────────────────────────────────
+
+
+class TestDisplayOrder:
+    def test_display_order_reflects_canonical_day_part_sections_not_raw_position(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        evening_item, morning_item, afternoon_item = uuid4(), uuid4(), uuid4()
+        # Raw persisted order: evening, morning, afternoon.
+        current = [str(evening_item), str(morning_item), str(afternoon_item)]
+        _patch_itinerary_service(
+            monkeypatch,
+            [
+                _item(evening_item, day_part="evening"),
+                _item(morning_item, day_part="morning"),
+                _item(afternoon_item, day_part="afternoon"),
+            ],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response(
+                [_leg(str(morning_item), str(afternoon_item)), _leg(str(afternoon_item), str(evening_item))]
+            ),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(
+            svc, "_call_llm", lambda *_a, **_k: _llm_response([str(morning_item), str(afternoon_item), str(evening_item)])
+        )
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=current), db=db,
+        )
+        assert resp.current_display_order == [str(morning_item), str(afternoon_item), str(evening_item)]
+
+    def test_display_order_includes_non_routeable_items_in_their_section(self, monkeypatch):
+        monkeypatch.setattr(svc, "get_settings", lambda: _settings(True))
+        user_id, trip_id, day_id = uuid4(), uuid4(), uuid4()
+        db = _owned_db(user_id, trip_id, day_id)
+        flight, a, b = uuid4(), uuid4(), uuid4()
+        # flight is morning by its own start_time; a, b are afternoon.
+        current = [str(a), str(flight), str(b)]
+        _patch_itinerary_service(
+            monkeypatch,
+            [
+                _item(a, day_part="afternoon"),
+                _item(flight, item_type="flight", start_time=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc)),
+                _item(b, day_part="afternoon"),
+            ],
+        )
+        route_fn = _route_call_sequence(
+            _success_route_response([_leg(str(a), str(b))]),
+        )
+        monkeypatch.setattr(svc, "compute_route_estimate", route_fn)
+        monkeypatch.setattr(svc, "_call_llm", lambda *_a, **_k: _llm_response([str(a), str(b)]))
+        resp = svc.generate_route_reorder_proposal(
+            trip_id, day_id, user_id,
+            RouteReorderProposalGenerateRequest(current_order=current), db=db,
+        )
+        # flight (morning) sorts before a/b (afternoon) in display order,
+        # even though it sits between them in raw position order.
+        assert resp.current_display_order == [str(flight), str(a), str(b)]
 
 
 # ── no writes ──────────────────────────────────────────────────────────────

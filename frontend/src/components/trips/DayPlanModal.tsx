@@ -132,6 +132,11 @@ function RouteSuggestionSection({
   const proposal: ReorderProposal = {
     currentOrder: routeProposal.currentOrder,
     proposedOrder: routeProposal.proposedOrder,
+    // Display-only: the same canonical Morning/Afternoon/Evening/
+    // Unscheduled section order ItineraryDayColumn renders — never used
+    // for the apply call itself (that always uses currentOrder/proposedOrder).
+    currentDisplayOrder: routeProposal.currentDisplayOrder,
+    proposedDisplayOrder: routeProposal.proposedDisplayOrder,
     rationale: routeProposal.rationale,
     moveReasons: routeProposal.moveReasons,
   };

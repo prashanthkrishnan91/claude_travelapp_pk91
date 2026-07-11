@@ -16,20 +16,33 @@ Hard safety guarantees enforced here:
 - Only activity/meal stops with canonical coordinates are eligible to move;
   every other item (flight/hotel/note/transit, or an eligible stop missing
   coordinates) keeps its exact existing position in the returned order.
+- Day-part sections (Morning / Afternoon / Evening / Unscheduled) — the same
+  sections ``ItineraryDayColumn`` renders — are hard boundaries. A routeable
+  stop may only be reordered among other routeable stops in its own
+  rendered day-part section; it can never cross into another section.
+  ``_get_item_day_part`` ports the exact same derivation contract
+  (``getItemDayPart`` in ``ItineraryDayColumn.tsx``: explicit
+  ``details.dayPart`` first, then ``details.timeLabel`` keywords, then
+  canonical ``start_time`` hour bucketing, else unscheduled) so this never
+  drifts from what the user actually sees. The LLM is never trusted to
+  honor this merely because it appears in the prompt — a generated order
+  that crosses a day-part boundary is rejected deterministically after
+  generation, not silently repaired.
 - The eligible item IDs in ``proposed_order`` are always exactly the eligible
   item IDs in ``current_order`` — validated before the response is built, not
   trusted from the model.
-- The LLM only *proposes*; Google Routes *verifies*. The current order is
-  routed once, the LLM's proposed order is routed a second time (only if it
-  actually changed and passed structural/fixed-time validation), and the
-  proposal is surfaced as a change only when the routed comparison shows a
-  deterministic, material improvement (see ``_is_material_improvement``).
-  Otherwise the unchanged current order is returned with
-  ``reason="current_order_already_practical"`` and no Apply action is
-  offered (``proposed_order == current_order``). No fabricated travel time,
-  distance, or location is ever passed to the model or returned to the
-  caller — every duration/distance figure in the response comes from real
-  Google Routes legs.
+- The LLM only *proposes*; Google Routes *verifies*. The current order
+  (canonical day-part + fixed-time order — the same order shown in the
+  preview) is routed once, the LLM's proposed order is routed a second time
+  (only if it actually changed and passed structural/day-part/fixed-time
+  validation), and the proposal is surfaced as a change only when the
+  routed comparison shows a deterministic, material improvement (see
+  ``_is_material_improvement``). Otherwise the unchanged current order is
+  returned with ``reason="current_order_already_practical"`` and no Apply
+  action is offered (``proposed_order == current_order``). No fabricated
+  travel time, distance, or location is ever passed to the model or
+  returned to the caller — every duration/distance figure in the response
+  comes from real Google Routes legs.
 - No hidden provider calls: both Google Routes calls this module makes reuse
   the existing registered route-estimate service (at most two calls total —
   current order, then proposed order only if it changed), and only run
@@ -41,8 +54,20 @@ Hard safety guarantees enforced here:
 - Fixed-time anchors: every movable stop with an explicit ``start_time`` is
   a fixed anchor — it must stay in its exact current slot, and no other
   stop may cross it. Untimed movable stops may only be reordered within the
-  contiguous segment (before/between/after anchors) they already occupy. A
+  contiguous segment (before/between/after anchors) they already occupy,
+  *and* only within their own day-part section (the two rules compose — an
+  anchor can never be used to smuggle a stop across a day-part boundary). A
   generated order that crosses an anchor is rejected, not silently fixed.
+- Preview parity: ``current_display_order``/``proposed_display_order``
+  reflect the exact same canonical day-part section order
+  ``ItineraryDayColumn`` renders (every day item, not just movable ones,
+  bucketed Morning → Afternoon → Evening → Unscheduled, preserving each
+  section's existing relative order) — never raw database position order.
+  ``current_order``/``proposed_order`` are unchanged in shape from PR C:
+  the full day's items in raw position order, exactly what the existing
+  apply endpoint (#528) requires. Applying a proposal never mutates
+  ``dayPart``, ``timeLabel``, ``start_time``, item type, or any metadata —
+  only the ``position`` field, via the existing apply contract.
 - No claim of mathematical optimality: a generated rationale/move-reason
   containing "optimal" or "perfect" is treated as an invalid generation and
   rejected, rather than shown to the user.
@@ -76,6 +101,10 @@ logger = logging.getLogger(__name__)
 _MODEL = os.getenv("AI_ROUTE_REORDER_PROPOSAL_MODEL", "claude-sonnet-4-6")
 _TIMEOUT_SECONDS = 12.0
 _CLAIM_UNSAFE_WORDS = ("optimal", "perfect")
+
+# Canonical day-part section order — mirrors DAY_PART_META's declaration
+# order in ItineraryDayColumn.tsx exactly.
+_DAY_PARTS: Tuple[str, ...] = ("morning", "afternoon", "evening", "unscheduled")
 
 # Conservative acceptance thresholds for surfacing a changed order — see
 # module docstring. A proposal is accepted only when the routed comparison
@@ -125,6 +154,50 @@ def _item_type_str(item_type: Any) -> str:
     return item_type.value if hasattr(item_type, "value") else str(item_type)
 
 
+def _get_item_day_part(item: Any) -> str:
+    """Ports ``getItemDayPart`` in ``ItineraryDayColumn.tsx`` exactly, for
+    the non-flight item types reachable here (only activity/meal stops are
+    ever movable, and ``current_display_order``/``proposed_display_order``
+    bucket every day item the same way the frontend does):
+    1. Explicit ``details.dayPart`` override (including explicit
+       ``"unscheduled"``).
+    2. ``details.timeLabel`` keyword match ("morning"/"afternoon"/
+       "evening"|"night").
+    3. Canonical ``start_time`` hour: [0,12) morning, [12,17) afternoon,
+       [17,24) evening.
+    4. Otherwise unscheduled.
+
+    This is the deterministic post-generation validator — the LLM is never
+    trusted to honor a day-part boundary merely because it appears in the
+    prompt.
+    """
+    details = item.details if isinstance(item.details, dict) else {}
+
+    explicit = details.get("dayPart")
+    if explicit in ("morning", "afternoon", "evening", "unscheduled"):
+        return explicit
+
+    label = str(details.get("timeLabel") or "").lower()
+    if "morning" in label:
+        return "morning"
+    if "afternoon" in label:
+        return "afternoon"
+    if "evening" in label or "night" in label:
+        return "evening"
+
+    start_time = getattr(item, "start_time", None)
+    if start_time is not None:
+        hour = start_time.hour
+        if 0 <= hour < 12:
+            return "morning"
+        if 12 <= hour < 17:
+            return "afternoon"
+        if hour >= 17:
+            return "evening"
+
+    return "unscheduled"
+
+
 def _disabled_response(day_id: UUID) -> RouteReorderProposalGenerateResponse:
     return RouteReorderProposalGenerateResponse(
         status="disabled",
@@ -149,6 +222,7 @@ def _unavailable(
 def _already_practical_response(
     day_id: UUID,
     actual_current_order: List[str],
+    current_display_order: List[str],
     current_duration_seconds: int,
     current_distance_meters: int,
     proposed_duration_seconds: Optional[int] = None,
@@ -169,6 +243,8 @@ def _already_practical_response(
         day_id=str(day_id),
         current_order=actual_current_order,
         proposed_order=actual_current_order,
+        current_display_order=current_display_order,
+        proposed_display_order=current_display_order,
         rationale="",
         move_reasons={},
         current_duration_seconds=current_duration_seconds,
@@ -219,6 +295,33 @@ def _build_movable_stops(items: List[Any]) -> Tuple[List[RouteableStop], Dict[st
     return movable_stops, movable_items_by_id
 
 
+def _canonical_bucket_order(
+    movable_stops: List[RouteableStop], bucket_by_id: Dict[str, str]
+) -> List[RouteableStop]:
+    """Bucket-sort movable stops into Morning -> Afternoon -> Evening ->
+    Unscheduled (the same section order ItineraryDayColumn renders), stops
+    within each bucket keeping their existing relative (position) order.
+    This becomes the canonical order used for the LLM prompt, both Google
+    Routes calls, and fixed-time-anchor validation — never raw database
+    position order once it diverges from what's rendered."""
+    buckets: Dict[str, List[RouteableStop]] = {part: [] for part in _DAY_PARTS}
+    for stop in movable_stops:
+        buckets[bucket_by_id[stop.item_id]].append(stop)
+    return [stop for part in _DAY_PARTS for stop in buckets[part]]
+
+
+def _bucketed_display_order(full_order: List[str], all_items_by_id: Dict[str, Any]) -> List[str]:
+    """Full-day display order matching ItineraryDayColumn's groupByDayPart:
+    every item (movable or not) bucketed into Morning -> Afternoon ->
+    Evening -> Unscheduled, preserving each bucket's existing relative
+    (position) order. Display only — apply always uses the raw
+    position-order current_order/proposed_order, never this."""
+    buckets: Dict[str, List[str]] = {part: [] for part in _DAY_PARTS}
+    for item_id in full_order:
+        buckets[_get_item_day_part(all_items_by_id[item_id])].append(item_id)
+    return [item_id for part in _DAY_PARTS for item_id in buckets[part]]
+
+
 def generate_route_reorder_proposal(
     trip_id: UUID,
     day_id: UUID,
@@ -242,6 +345,7 @@ def generate_route_reorder_proposal(
     itinerary = ItineraryService(db)
     items = itinerary.list_items(day_id, user_id=user_id)
     actual_current_order = [str(item.id) for item in items]
+    all_items_by_id = {str(item.id): item for item in items}
 
     if payload.current_order != actual_current_order:
         return _unavailable(
@@ -278,11 +382,16 @@ def generate_route_reorder_proposal(
             ),
         )
 
-    # First Google Routes call: the day's current order. Reuses the existing
-    # registered route-estimate service — same provider client, order
-    # preserved, no matrix/optimization.
+    bucket_by_id = {item_id: _get_item_day_part(item) for item_id, item in movable_items_by_id.items()}
+    canonical_movable_stops = _canonical_bucket_order(movable_stops, bucket_by_id)
+    current_display_order = _bucketed_display_order(actual_current_order, all_items_by_id)
+
+    # First Google Routes call: the day's current order, in the SAME
+    # canonical day-part order shown in the preview — never raw position
+    # order. Reuses the existing registered route-estimate service — same
+    # provider client, no matrix/optimization.
     current_route_response = compute_route_estimate(
-        RouteEstimateRequest(stops=movable_stops),
+        RouteEstimateRequest(stops=canonical_movable_stops),
         trip_id,
         day_id,
         user_id=user_id,
@@ -301,7 +410,7 @@ def generate_route_reorder_proposal(
 
     current_duration, current_distance = _sum_route_totals(current_route_response.estimates)
 
-    prompt = _build_prompt(movable_stops, movable_items_by_id, current_route_response.estimates)
+    prompt = _build_prompt(canonical_movable_stops, movable_items_by_id, bucket_by_id, current_route_response.estimates)
     raw_response = _call_llm(prompt)
     if raw_response is None:
         return _unavailable(
@@ -326,7 +435,22 @@ def generate_route_reorder_proposal(
         )
     proposed_movable_order, rationale, move_reasons = validated
 
-    current_movable_order = [stop.item_id for stop in movable_stops]
+    current_movable_order = [stop.item_id for stop in canonical_movable_stops]
+
+    # Deterministic post-generation validation — the LLM is never trusted to
+    # honor a day-part boundary or a fixed-time anchor merely because the
+    # prompt asked for it.
+    if not _day_part_boundaries_respected(current_movable_order, proposed_movable_order, bucket_by_id):
+        return _unavailable(
+            day_id,
+            actual_current_order,
+            reason="day_part_boundary_violated",
+            message=(
+                "AI route planning couldn't produce a suggestion that "
+                "stays within this day's Morning/Afternoon/Evening "
+                "sections. Please try again."
+            ),
+        )
 
     if not _fixed_time_segments_respected(current_movable_order, proposed_movable_order, movable_items_by_id):
         return _unavailable(
@@ -345,6 +469,7 @@ def generate_route_reorder_proposal(
         return _already_practical_response(
             day_id,
             actual_current_order,
+            current_display_order,
             current_duration,
             current_distance,
             route_call_count=1,
@@ -352,8 +477,9 @@ def generate_route_reorder_proposal(
         )
 
     # Second Google Routes call: the proposed order, only reachable once the
-    # generation passed structural + fixed-time validation and actually
-    # differs from the current order.
+    # generation passed structural + day-part + fixed-time validation and
+    # actually differs from the current order. Same canonical stop objects,
+    # only their sequence changes — the exact order shown in the preview.
     stop_by_id = {stop.item_id: stop for stop in movable_stops}
     proposed_stops_ordered = [stop_by_id[item_id] for item_id in proposed_movable_order]
     proposed_route_response = compute_route_estimate(
@@ -380,6 +506,7 @@ def generate_route_reorder_proposal(
         return _already_practical_response(
             day_id,
             actual_current_order,
+            current_display_order,
             current_duration,
             current_distance,
             proposed_duration_seconds=proposed_duration,
@@ -388,7 +515,8 @@ def generate_route_reorder_proposal(
             movable_stop_count=len(movable_stops),
         )
 
-    full_proposed_order = _splice_movable_order(actual_current_order, movable_ids, proposed_movable_order)
+    full_proposed_order = _splice_movable_order(actual_current_order, movable_ids, proposed_movable_order, bucket_by_id)
+    proposed_display_order = _bucketed_display_order(full_proposed_order, all_items_by_id)
 
     return RouteReorderProposalGenerateResponse(
         status="success",
@@ -397,6 +525,8 @@ def generate_route_reorder_proposal(
         day_id=str(day_id),
         current_order=actual_current_order,
         proposed_order=full_proposed_order,
+        current_display_order=current_display_order,
+        proposed_display_order=proposed_display_order,
         rationale=rationale,
         move_reasons=move_reasons,
         current_duration_seconds=current_duration,
@@ -451,6 +581,24 @@ def _is_material_improvement(
     return False
 
 
+def _day_part_boundaries_respected(
+    current_movable_order: List[str],
+    proposed_movable_order: List[str],
+    bucket_by_id: Dict[str, str],
+) -> bool:
+    """Rendered day-part sections (Morning/Afternoon/Evening/Unscheduled)
+    are hard boundaries. ``current_movable_order`` is already canonical
+    bucket order, so each section occupies a fixed, contiguous index range;
+    requiring the bucket at every index to match between current and
+    proposed forces every item into an index range that only its own
+    section owns — a routeable stop can never cross into another section,
+    while free reordering within a section is unaffected."""
+    return all(
+        bucket_by_id[current_movable_order[i]] == bucket_by_id[proposed_movable_order[i]]
+        for i in range(len(current_movable_order))
+    )
+
+
 def _fixed_time_segments_respected(
     current_movable_order: List[str],
     proposed_movable_order: List[str],
@@ -460,7 +608,12 @@ def _fixed_time_segments_respected(
     it must stay in its exact current slot, and nothing may cross it.
     Untimed stops may only be reordered within the contiguous segment
     (before the first anchor, between two anchors, or after the last
-    anchor) they already occupy — never across an anchor."""
+    anchor) they already occupy — never across an anchor. Composes with
+    ``_day_part_boundaries_respected`` (both must pass): since
+    ``current_movable_order`` is canonical day-part order, a segment can
+    span a day-part boundary when there's no anchor between two sections,
+    but the day-part check independently rejects any resulting cross-
+    section move even when this check alone would have allowed it."""
     anchor_indices = {
         i for i, item_id in enumerate(current_movable_order) if getattr(items_by_id[item_id], "start_time", None)
     }
@@ -483,30 +636,55 @@ def _fixed_time_segments_respected(
 
 
 def _splice_movable_order(
-    full_current_order: List[str], movable_ids: set, proposed_movable_order: List[str]
+    full_current_order: List[str],
+    movable_ids: set,
+    proposed_movable_order: List[str],
+    bucket_by_id: Dict[str, str],
 ) -> List[str]:
-    """Rebuild the full day order, replacing only the movable-item slots (in
-    their original absolute positions) with the model's new sequence for
-    those slots. Every non-movable item stays at its exact current index."""
-    it = iter(proposed_movable_order)
-    return [next(it) if item_id in movable_ids else item_id for item_id in full_current_order]
+    """Rebuild the full day order (raw position-order shape, exactly what
+    the existing apply endpoint requires). Each movable item's slot (its
+    original absolute index among the day's items) is reassigned only to
+    another movable item from the SAME day-part bucket, using the accepted
+    new relative order for that bucket — never a different bucket, and
+    never a non-movable item's slot. Non-movable items, and the specific
+    set of index positions available to each bucket, never change; this
+    only changes which specific item occupies which already-movable slot.
+    ``proposed_movable_order`` is itself canonical bucket-order (each
+    bucket's ids are contiguous), so slicing per bucket recovers each
+    bucket's accepted new sequence directly."""
+    slot_indices_by_bucket: Dict[str, List[int]] = {part: [] for part in _DAY_PARTS}
+    for i, item_id in enumerate(full_current_order):
+        if item_id in movable_ids:
+            slot_indices_by_bucket[bucket_by_id[item_id]].append(i)
+
+    new_order_by_bucket: Dict[str, List[str]] = {part: [] for part in _DAY_PARTS}
+    for item_id in proposed_movable_order:
+        new_order_by_bucket[bucket_by_id[item_id]].append(item_id)
+
+    result = list(full_current_order)
+    for part in _DAY_PARTS:
+        for slot_index, item_id in zip(slot_indices_by_bucket[part], new_order_by_bucket[part]):
+            result[slot_index] = item_id
+    return result
 
 
 def _build_prompt(
     stops: List[RouteableStop],
     items_by_id: Dict[str, Any],
+    bucket_by_id: Dict[str, str],
     estimates: List[Dict[str, Any]],
 ) -> str:
     stop_lines = []
     for stop in stops:
         item = items_by_id[stop.item_id]
-        parts = [f'id="{stop.item_id}"', f'title="{stop.title}"', f"type={stop.item_type}"]
+        parts = [
+            f'id="{stop.item_id}"',
+            f'title="{stop.title}"',
+            f"type={stop.item_type}",
+            f"section={bucket_by_id[stop.item_id]}",
+        ]
         if item.start_time:
             parts.append(f'fixed_time="{item.start_time.isoformat()}"')
-        details = item.details if isinstance(item.details, dict) else {}
-        day_part = details.get("dayPart")
-        if isinstance(day_part, str) and day_part:
-            parts.append(f'day_part="{day_part}"')
         parts.append(f"lat={stop.lat}")
         parts.append(f"lng={stop.lng}")
         stop_lines.append(" ".join(parts))
@@ -522,13 +700,13 @@ def _build_prompt(
 
     return f"""You are helping arrange stops already added to one day of a trip itinerary into a more practical order. These stops are already in the itinerary — you are only suggesting a better sequence for them, never adding, removing, or inventing a stop.
 
-Stops in this day's current order:
+Stops in this day's current order, grouped into the same Morning / Afternoon / Evening / Unscheduled sections the traveler sees in their itinerary (the "section" field):
 {chr(10).join(stop_lines)}
 
 Real travel time between consecutive stops in the CURRENT order, from the app's route provider — do not invent any figure not listed here:
 {chr(10).join(leg_lines) if leg_lines else "(no leg data)"}
 
-Task: suggest a more practical order for these stops that reduces unnecessary backtracking, honors any fixed_time or day_part shown above, keeps sensible meal placement, and preserves the traveler's intent. Any stop with a fixed_time is a hard anchor — it cannot move from its position, and other stops cannot be reordered across it; you may only reorder untimed stops among themselves, within the stretch of stops between the same two fixed_time anchors (or before the first / after the last). If the current order is already reasonable, keep it unchanged — prefer minimal changes over churn. Never invent a location, travel time, or opening hour beyond what is given above. This is a suggested order, not a mathematically optimal one — do not use the words "optimal" or "perfect" anywhere in your response.
+Task: suggest a more practical order for these stops that reduces unnecessary backtracking, honors any fixed_time shown above, keeps sensible meal placement, and preserves the traveler's intent. HARD RULE: a stop may only be reordered relative to OTHER stops in the SAME section — never move a stop into a different section, and never move a stop before/after a stop from a different section. Within a section, any stop with a fixed_time is also a hard anchor — it cannot move from its position, and other stops in that section cannot be reordered across it; you may only reorder untimed stops among themselves, within the stretch of same-section stops between the same two fixed_time anchors (or before the first / after the last). If the current order is already reasonable, keep it unchanged — prefer minimal changes over churn. Never invent a location, travel time, or opening hour beyond what is given above. This is a suggested order, not a mathematically optimal one — do not use the words "optimal" or "perfect" anywhere in your response.
 
 Return ONLY a JSON object with exactly this shape (ids must be exactly the ids listed above, each exactly once):
 {{"proposed_order": ["id1", "id2", ...], "rationale": "one or two plain-English sentences", "move_reasons": {{"id": "short reason", "...": "only include an entry if it materially helps"}}}}"""
@@ -589,9 +767,10 @@ def _validate_generation(
 ) -> Optional[Tuple[List[str], str, Dict[str, str]]]:
     """Validate an LLM-generated proposal's structure and copy safety.
     Returns None (fail-closed) on any mismatch — never silently repairs a
-    malformed generation. Fixed-time anchor/segment validation happens
-    separately in ``_fixed_time_segments_respected`` once the current
-    movable order is available."""
+    malformed generation. Day-part-boundary and fixed-time anchor/segment
+    validation happen separately (``_day_part_boundaries_respected``,
+    ``_fixed_time_segments_respected``) once the current canonical movable
+    order is available."""
     proposed = parsed.get("proposed_order")
     if not isinstance(proposed, list) or not all(isinstance(x, str) for x in proposed):
         return None

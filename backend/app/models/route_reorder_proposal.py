@@ -89,9 +89,22 @@ class RouteReorderProposalGenerateResponse(BaseModel):
       frontend must not offer an Apply action in that case).
 
     ``proposed_order`` (when non-empty) always contains exactly the same
-    item IDs as ``current_order`` (the full day, in position order),
-    reordered only among the eligible activity/meal stops the model
-    reasoned about, and only within their existing fixed-time segment.
+    item IDs as ``current_order`` (the full day, in raw position order —
+    exactly what the existing apply endpoint (#528) requires), reordered
+    only among the eligible activity/meal stops the model reasoned about,
+    and only within their existing day-part section and fixed-time
+    segment.
+
+    ``current_display_order``/``proposed_display_order`` are a SEPARATE,
+    display-only shape: every day item (not just movable ones) bucketed
+    into the same Morning/Afternoon/Evening/Unscheduled sections
+    ``ItineraryDayColumn`` renders, in that canonical section order. The
+    frontend preview must render these (not ``current_order``/
+    ``proposed_order``, which stay in raw position order for the apply
+    contract) so what the user sees always matches the rendered itinerary.
+    Applying a proposal still only ever sends ``current_order``/
+    ``proposed_order`` to the existing apply endpoint — display order is
+    never written anywhere.
 
     ``current_duration_seconds``/``proposed_duration_seconds``/
     ``current_distance_meters``/``proposed_distance_meters`` and their
@@ -110,6 +123,8 @@ class RouteReorderProposalGenerateResponse(BaseModel):
     day_id: str
     current_order: List[str] = Field(default_factory=list)
     proposed_order: List[str] = Field(default_factory=list)
+    current_display_order: List[str] = Field(default_factory=list)
+    proposed_display_order: List[str] = Field(default_factory=list)
     rationale: str = ""
     move_reasons: Dict[str, str] = Field(default_factory=dict)
     current_duration_seconds: Optional[int] = None

@@ -29,6 +29,15 @@
  *     from the backend, not a fabricated claim.
  * 11. Apply failure leaves the displayed itinerary order unchanged — the
  *     day's local state is only ever mutated from the "applied" branch.
+ * 12. Current and proposed preview lists use the canonical
+ *     Morning/Afternoon/Evening/Unscheduled display order from the
+ *     backend, not raw position order.
+ * 13. A cross-day-part proposal is rejected server-side before it ever
+ *     reaches "success" — the frontend never has a code path that shows
+ *     Apply for a day-part-crossing proposal.
+ * 14. ItineraryDayColumn's inline connectors are untouched by this
+ *     patch — they still key off the same item/routeLegs props as before,
+ *     with no new day-part display-order wiring.
  */
 
 import test from "node:test";
@@ -252,4 +261,75 @@ test("TripBuilder's handleRouteProposalApplied (the only local-order mutator) is
     apiSrc.match(/export async function applyRouteReorderProposal[\s\S]{0,600}/)[0],
     /handleRouteProposalApplied/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// 12. Preview uses canonical day-part display order, not raw position order
+// ---------------------------------------------------------------------------
+
+test("RouteSuggestionSection passes currentDisplayOrder/proposedDisplayOrder through to the shared preview", () => {
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  assert.ok(fnMatch, "RouteSuggestionSection must exist");
+  assert.match(fnMatch[0], /currentDisplayOrder: routeProposal\.currentDisplayOrder/);
+  assert.match(fnMatch[0], /proposedDisplayOrder: routeProposal\.proposedDisplayOrder/);
+});
+
+test("ReorderProposalPreview renders display order (falling back to raw order) instead of always using raw order", () => {
+  const previewSrc = readFileSync(
+    new URL("../src/components/trips/ReorderProposalPreview.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    previewSrc,
+    /const displayedCurrentOrder = proposal\.currentDisplayOrder \?\? proposal\.currentOrder;/,
+  );
+  assert.match(
+    previewSrc,
+    /const displayedProposedOrder = proposal\.proposedDisplayOrder \?\? proposal\.proposedOrder;/,
+  );
+  assert.match(previewSrc, /displayedCurrentOrder\.map/);
+  assert.match(previewSrc, /displayedProposedOrder\.map/);
+});
+
+test("backend response type declares currentDisplayOrder/proposedDisplayOrder as required (non-optional) fields", () => {
+  const typesSrc = readFileSync(new URL("../src/types/index.ts", import.meta.url), "utf8");
+  const block = typesSrc
+    .split("export interface RouteReorderProposalGenerateResponse")[1]
+    .split(/^\}/m)[0];
+  assert.match(block, /currentDisplayOrder: string\[\];/);
+  assert.match(block, /proposedDisplayOrder: string\[\];/);
+});
+
+// ---------------------------------------------------------------------------
+// 13. Cross-day-part proposals never reach a state that shows Apply
+// ---------------------------------------------------------------------------
+
+test("a day-part-boundary violation is rejected server-side as status=unavailable, never surfaced as success", () => {
+  // Static proof that the backend contract this frontend consumes treats
+  // day_part_boundary_violated as an "unavailable" reason (see
+  // backend/app/services/route_reorder_proposal_generate.py) — the
+  // frontend's existing unavailable branch (which never renders
+  // ReorderProposalPreview, per an earlier test in this file) is therefore
+  // the only code path reachable for a cross-day-part proposal. This test
+  // guards against a future change accidentally special-casing that reason
+  // to show Apply.
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  assert.doesNotMatch(
+    fnMatch[0],
+    /day_part_boundary_violated/,
+    "the frontend must not special-case this reason — it is just another unavailable message",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 14. Inline connectors untouched by this patch
+// ---------------------------------------------------------------------------
+
+test("ItineraryDayColumn has no new day-part display-order wiring", () => {
+  assert.doesNotMatch(dayColumnSrc, /DisplayOrder/);
+  assert.doesNotMatch(dayColumnSrc, /currentDisplayOrder|proposedDisplayOrder/);
+});
+
+test("renderItemsWithConnectors still exists, unchanged by this patch", () => {
+  assert.match(dayColumnSrc, /function renderItemsWithConnectors/);
 });

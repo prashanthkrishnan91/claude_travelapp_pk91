@@ -99,8 +99,29 @@ test("preview shows both current order and proposed order", () => {
   const src = extractComponent(previewSrc, "ReorderProposalPreview");
   assert.match(src, /data-testid="reorder-proposal-current"/, "current order block must render");
   assert.match(src, /data-testid="reorder-proposal-proposed"/, "proposed order block must render");
-  assert.match(src, /proposal\.currentOrder\.map/, "must map over currentOrder");
-  assert.match(src, /proposal\.proposedOrder\.map/, "must map over proposedOrder");
+  assert.match(src, /displayedCurrentOrder\.map/, "must map over the (display-order-aware) current order");
+  assert.match(src, /displayedProposedOrder\.map/, "must map over the (display-order-aware) proposed order");
+});
+
+test("preview prefers currentDisplayOrder/proposedDisplayOrder over raw currentOrder/proposedOrder when supplied", () => {
+  const src = extractComponent(previewSrc, "ReorderProposalPreview");
+  assert.match(
+    src,
+    /const displayedCurrentOrder = proposal\.currentDisplayOrder \?\? proposal\.currentOrder;/,
+    "display order must fall back to the raw order when absent",
+  );
+  assert.match(
+    src,
+    /const displayedProposedOrder = proposal\.proposedDisplayOrder \?\? proposal\.proposedOrder;/,
+  );
+});
+
+test("apply always uses the raw currentOrder/proposedOrder, never the display order", () => {
+  const src = extractComponent(previewSrc, "ReorderProposalPreview");
+  const confirmMatch = src.match(/const handleConfirm = async \(\) => \{[\s\S]*?\n  \};/);
+  assert.ok(confirmMatch, "handleConfirm must exist");
+  assert.match(confirmMatch[0], /proposal\.currentOrder,\s*\n\s*proposal\.proposedOrder/);
+  assert.doesNotMatch(confirmMatch[0], /displayedCurrentOrder|displayedProposedOrder|DisplayOrder/, "apply must never send display-only ordering");
 });
 
 // ---------------------------------------------------------------------------
