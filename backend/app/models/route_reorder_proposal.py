@@ -10,7 +10,7 @@ and the server verifies them before writing anything.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -72,14 +72,33 @@ class RouteReorderProposalGenerateResponse(BaseModel):
     """Result of an AI route-reorder proposal generation attempt.
 
     ``status`` values:
-    - ``"disabled"``: feature flag off.
+    - ``"disabled"``: a required feature flag is off (either
+      ``ai_route_reorder_proposal_v1_enabled`` or
+      ``route_reorder_proposal_v1_enabled`` — generation never returns an
+      actionable proposal when the apply path is unavailable).
     - ``"unavailable"``: no proposal could be honestly generated (too few
-      routeable stops, stale current_order, route data unavailable, LLM
-      unavailable, or a generated proposal failed validation). ``reason``
-      carries the machine-readable cause; ``proposed_order`` is empty.
-    - ``"success"``: ``proposed_order`` contains exactly the same item IDs as
-      ``current_order`` (the full day, in position order), reordered only
-      among the eligible activity/meal stops the model reasoned about.
+      routeable stops, stale current_order, route data unavailable for
+      either the current or proposed order, LLM unavailable, a generated
+      proposal failed structural/claim-safety validation, or it crossed a
+      fixed-time anchor). ``reason`` carries the machine-readable cause;
+      ``proposed_order`` is empty.
+    - ``"success"``: either a verified, materially-better order
+      (``reason="proposal_generated"``) or an honest "no material
+      improvement" result (``reason="current_order_already_practical"``,
+      where ``proposed_order`` always equals ``current_order`` — the
+      frontend must not offer an Apply action in that case).
+
+    ``proposed_order`` (when non-empty) always contains exactly the same
+    item IDs as ``current_order`` (the full day, in position order),
+    reordered only among the eligible activity/meal stops the model
+    reasoned about, and only within their existing fixed-time segment.
+
+    ``current_duration_seconds``/``proposed_duration_seconds``/
+    ``current_distance_meters``/``proposed_distance_meters`` and their
+    ``estimated_*_savings_*`` deltas are always computed from real Google
+    Routes legs returned by the existing route-estimate service — never
+    from LLM output. They are ``None`` only when no route comparison was
+    made (``disabled``/most ``unavailable`` reasons).
 
     Never fabricates a travel time, distance, or location that wasn't
     already available from the app's existing route/coordinate data.
@@ -93,4 +112,10 @@ class RouteReorderProposalGenerateResponse(BaseModel):
     proposed_order: List[str] = Field(default_factory=list)
     rationale: str = ""
     move_reasons: Dict[str, str] = Field(default_factory=dict)
+    current_duration_seconds: Optional[int] = None
+    proposed_duration_seconds: Optional[int] = None
+    estimated_savings_seconds: Optional[int] = None
+    current_distance_meters: Optional[int] = None
+    proposed_distance_meters: Optional[int] = None
+    estimated_distance_savings_meters: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

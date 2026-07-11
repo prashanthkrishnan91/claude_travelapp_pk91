@@ -208,6 +208,7 @@ export type RouteReorderProposalGenerateStatus = "disabled" | "unavailable" | "s
 
 export interface RouteReorderProposalGenerateResponse {
   status: RouteReorderProposalGenerateStatus;
+  /** Machine-readable cause, e.g. "proposal_generated", "current_order_already_practical". */
   reason: string;
   message: string;
   dayId: string;
@@ -215,6 +216,13 @@ export interface RouteReorderProposalGenerateResponse {
   proposedOrder: string[];
   rationale: string;
   moveReasons: Record<string, string>;
+  /** Provider-derived (Google Routes) evidence — never LLM-authored. Null when no route comparison was made. */
+  currentDurationSeconds?: number | null;
+  proposedDurationSeconds?: number | null;
+  estimatedSavingsSeconds?: number | null;
+  currentDistanceMeters?: number | null;
+  proposedDistanceMeters?: number | null;
+  estimatedDistanceSavingsMeters?: number | null;
 }
 
 // ─── Travel Card ─────────────────────────────────────────────────────────────

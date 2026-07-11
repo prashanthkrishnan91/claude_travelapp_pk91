@@ -20,6 +20,15 @@
  *     component was introduced.
  * 7.  Applying a suggestion refreshes the day's local item order and clears
  *     the proposal; it is wired through the existing onApplied callback.
+ * 8.  A validated, route-improved proposal renders current vs proposed
+ *     order, a deterministic (provider-derived, not LLM-authored) savings
+ *     line, and Cancel/Apply controls.
+ * 9.  A current-order-already-practical result shows no Apply action —
+ *     only the deterministic backend message, never the reorder preview.
+ * 10. A route-validation-failure ("unavailable") result shows honest copy
+ *     from the backend, not a fabricated claim.
+ * 11. Apply failure leaves the displayed itinerary order unchanged — the
+ *     day's local state is only ever mutated from the "applied" branch.
  */
 
 import test from "node:test";
@@ -153,4 +162,94 @@ test("handleRouteProposalApplied reorders the day's items and clears the proposa
 test("DayPlanModal wires onRouteProposalApplied through to the shared preview's onApplied", () => {
   assert.match(tripBuilderSrc, /onRouteProposalApplied=\{handleRouteProposalApplied\}/);
   assert.match(dayPlanModalSrc, /onApplied=\{onApplied\}/);
+});
+
+// ---------------------------------------------------------------------------
+// 8. Improved proposal: current vs proposed, deterministic savings, Cancel/Apply
+// ---------------------------------------------------------------------------
+
+test("formatEstimatedSavings is computed only from provider duration/distance fields, never LLM text", () => {
+  const fnMatch = dayPlanModalSrc.match(/function formatEstimatedSavings\([\s\S]*?\n\}/);
+  assert.ok(fnMatch, "formatEstimatedSavings must exist");
+  assert.match(fnMatch[0], /estimatedSavingsSeconds/);
+  assert.match(fnMatch[0], /estimatedDistanceSavingsMeters/);
+  assert.doesNotMatch(fnMatch[0], /\brationale\b/, "savings line must not read LLM-authored rationale text");
+});
+
+test("RouteSuggestionSection renders the deterministic savings line above the reorder preview for an improved proposal", () => {
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  assert.ok(fnMatch, "RouteSuggestionSection must exist");
+  assert.match(fnMatch[0], /formatEstimatedSavings\(routeProposal\)/);
+  assert.match(fnMatch[0], /data-testid="route-suggestion-savings"/);
+  assert.match(fnMatch[0], /<ReorderProposalPreview/, "the before/after preview with Cancel/Apply must still render for a real proposal");
+});
+
+// ---------------------------------------------------------------------------
+// 9. current_order_already_practical: no Apply action
+// ---------------------------------------------------------------------------
+
+test("RouteSuggestionSection treats reason=current_order_already_practical as authoritative for hiding Apply", () => {
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  assert.match(
+    fnMatch[0],
+    /routeProposal\.reason === "current_order_already_practical"/,
+    "must check the deterministic backend reason code",
+  );
+});
+
+test("the already-practical branch renders only the backend message, never ReorderProposalPreview", () => {
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  const body = fnMatch[0];
+  const alreadyPracticalMatch = body.match(
+    /if \(isAlreadyPractical\) \{[\s\S]*?\n  \}/,
+  );
+  assert.ok(alreadyPracticalMatch, "already-practical early-return branch must exist");
+  assert.doesNotMatch(alreadyPracticalMatch[0], /ReorderProposalPreview/, "must not render Apply controls when nothing is actionable");
+  assert.match(alreadyPracticalMatch[0], /\{routeProposal\.message\}/, "must show the deterministic backend copy");
+});
+
+// ---------------------------------------------------------------------------
+// 10. Route-validation-failure ("unavailable") shows honest backend copy
+// ---------------------------------------------------------------------------
+
+test("the unavailable branch renders the backend's own honest message, not a fabricated claim", () => {
+  const fnMatch = dayPlanModalSrc.match(/function RouteSuggestionSection\([\s\S]*?\n\}\n/);
+  const unavailableMatch = fnMatch[0].match(
+    /if \(routeProposal\.status === "unavailable"\) \{[\s\S]*?\n  \}/,
+  );
+  assert.ok(unavailableMatch, "unavailable branch must exist");
+  assert.match(unavailableMatch[0], /data-testid="route-suggestion-unavailable"/);
+  assert.match(unavailableMatch[0], /\{routeProposal\.message\}/, "must render the backend-provided message, not hardcoded copy");
+  assert.doesNotMatch(unavailableMatch[0], /ReorderProposalPreview/, "must not offer Apply when the route couldn't be verified");
+});
+
+// ---------------------------------------------------------------------------
+// 11. Apply failure leaves the displayed itinerary order unchanged
+// ---------------------------------------------------------------------------
+
+test("day state is only mutated from the applied branch of ReorderProposalPreview's confirm handler", () => {
+  const previewSrc = readFileSync(
+    new URL("../src/components/trips/ReorderProposalPreview.tsx", import.meta.url),
+    "utf8",
+  );
+  const confirmMatch = previewSrc.match(/const handleConfirm = async \(\) => \{[\s\S]*?\n  \};/);
+  assert.ok(confirmMatch, "handleConfirm must exist");
+  const body = confirmMatch[0];
+  // onApplied (which drives TripBuilder's setDays reorder) is only called
+  // inside the `status === "applied"` branch — a failed/rejected apply
+  // call must fall into the else branch and only set an error message.
+  const appliedBranch = body.match(/if \(result\.status === "applied"\) \{[\s\S]*?\}\s*else\s*\{[\s\S]*?\}/);
+  assert.ok(appliedBranch, "must branch on result.status === \"applied\"");
+  assert.match(appliedBranch[0], /onApplied\?\.\(result\.order\)/);
+  const elseBranch = appliedBranch[0].match(/else\s*\{([\s\S]*?)\}$/);
+  assert.ok(elseBranch, "else branch must exist for a non-applied result");
+  assert.doesNotMatch(elseBranch[1], /onApplied/, "onApplied (and therefore the day's displayed order) must not be touched on apply failure");
+  assert.match(elseBranch[1], /setErrorMessage/, "apply failure must surface an honest error instead");
+});
+
+test("TripBuilder's handleRouteProposalApplied (the only local-order mutator) is not called from api.ts error paths", () => {
+  assert.doesNotMatch(
+    apiSrc.match(/export async function applyRouteReorderProposal[\s\S]{0,600}/)[0],
+    /handleRouteProposalApplied/,
+  );
 });

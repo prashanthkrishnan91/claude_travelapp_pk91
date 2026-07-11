@@ -9,30 +9,40 @@ Hard safety guarantees enforced here:
 - No itinerary write of any kind — this module only reads and reasons.
   Applying a proposal is a separate explicit action via the existing
   ``apply_route_reorder_proposal`` (PR C) endpoint.
+- Both the generation flag (``ai_route_reorder_proposal_v1_enabled``) and the
+  apply flag (``route_reorder_proposal_v1_enabled``) must be on before any
+  Google Routes or LLM call happens — a proposal is never generated for a
+  day where applying it would be impossible.
 - Only activity/meal stops with canonical coordinates are eligible to move;
   every other item (flight/hotel/note/transit, or an eligible stop missing
   coordinates) keeps its exact existing position in the returned order.
 - The eligible item IDs in ``proposed_order`` are always exactly the eligible
   item IDs in ``current_order`` — validated before the response is built, not
   trusted from the model.
-- No fabricated travel time, distance, or location: the LLM is given only
-  route legs already computed by the existing Google Routes adapter for the
-  day's current order, plus canonical coordinates already on each item. If
-  that route data isn't available, this returns "unavailable" rather than
-  asking the model to guess.
-- No hidden provider calls: the Google Routes call this module makes reuses
-  the existing registered route-estimate service, and only runs after the
-  explicit generate request (itself only reachable from an explicit user
-  click) — the same single-call, no-matrix, no-optimization contract as the
-  existing route-estimate endpoint.
+- The LLM only *proposes*; Google Routes *verifies*. The current order is
+  routed once, the LLM's proposed order is routed a second time (only if it
+  actually changed and passed structural/fixed-time validation), and the
+  proposal is surfaced as a change only when the routed comparison shows a
+  deterministic, material improvement (see ``_is_material_improvement``).
+  Otherwise the unchanged current order is returned with
+  ``reason="current_order_already_practical"`` and no Apply action is
+  offered (``proposed_order == current_order``). No fabricated travel time,
+  distance, or location is ever passed to the model or returned to the
+  caller — every duration/distance figure in the response comes from real
+  Google Routes legs.
+- No hidden provider calls: both Google Routes calls this module makes reuse
+  the existing registered route-estimate service (at most two calls total —
+  current order, then proposed order only if it changed), and only run
+  after the explicit generate request. No matrix API, no new provider.
 - No new provider/model authority: the LLM call reuses the existing
   Anthropic REASONING provider, following the same lazy-import /
   fail-closed / env-key pattern already used by
   ``app.concierge.batched_reason_builder``.
-- Fixed-time stops: any two movable stops that both carry an explicit
-  ``start_time`` must keep their chronological relative order in the
-  proposal — a generated order that would silently violate this is rejected
-  rather than surfaced.
+- Fixed-time anchors: every movable stop with an explicit ``start_time`` is
+  a fixed anchor — it must stay in its exact current slot, and no other
+  stop may cross it. Untimed movable stops may only be reordered within the
+  contiguous segment (before/between/after anchors) they already occupy. A
+  generated order that crosses an anchor is rejected, not silently fixed.
 - No claim of mathematical optimality: a generated rationale/move-reason
   containing "optimal" or "perfect" is treated as an invalid generation and
   rejected, rather than shown to the user.
@@ -66,6 +76,21 @@ logger = logging.getLogger(__name__)
 _MODEL = os.getenv("AI_ROUTE_REORDER_PROPOSAL_MODEL", "claude-sonnet-4-6")
 _TIMEOUT_SECONDS = 12.0
 _CLAIM_UNSAFE_WORDS = ("optimal", "perfect")
+
+# Conservative acceptance thresholds for surfacing a changed order — see
+# module docstring. A proposal is accepted only when the routed comparison
+# clears one of these two bars.
+_DURATION_IMPROVEMENT_ABS_SECONDS = 300  # 5 minutes
+_DURATION_IMPROVEMENT_PCT = 0.10
+_DURATION_SIMILAR_WINDOW_SECONDS = 120  # 2 minutes
+_DISTANCE_IMPROVEMENT_ABS_METERS = 1000  # 1 km
+_DISTANCE_IMPROVEMENT_PCT = 0.10
+
+_ALREADY_PRACTICAL_MESSAGE = (
+    "This day's order already looks practical — the suggested change "
+    "didn't meaningfully reduce travel time or distance, so nothing is "
+    "proposed."
+)
 
 
 def _verify_trip_ownership(db: Any, trip_id: UUID, user_id: UUID) -> None:
@@ -121,43 +146,50 @@ def _unavailable(
     )
 
 
-def generate_route_reorder_proposal(
-    trip_id: UUID,
+def _already_practical_response(
     day_id: UUID,
-    user_id: UUID,
-    payload: RouteReorderProposalGenerateRequest,
-    db: Any,
+    actual_current_order: List[str],
+    current_duration_seconds: int,
+    current_distance_meters: int,
+    proposed_duration_seconds: Optional[int] = None,
+    proposed_distance_meters: Optional[int] = None,
+    route_call_count: int = 1,
+    movable_stop_count: int = 0,
 ) -> RouteReorderProposalGenerateResponse:
-    """Generate a suggested stop order for one day, or an honest unavailable
-    result. Never writes anything.
-    """
-    settings = get_settings()
+    final_duration = (
+        proposed_duration_seconds if proposed_duration_seconds is not None else current_duration_seconds
+    )
+    final_distance = (
+        proposed_distance_meters if proposed_distance_meters is not None else current_distance_meters
+    )
+    return RouteReorderProposalGenerateResponse(
+        status="success",
+        reason="current_order_already_practical",
+        message=_ALREADY_PRACTICAL_MESSAGE,
+        day_id=str(day_id),
+        current_order=actual_current_order,
+        proposed_order=actual_current_order,
+        rationale="",
+        move_reasons={},
+        current_duration_seconds=current_duration_seconds,
+        proposed_duration_seconds=final_duration,
+        estimated_savings_seconds=current_duration_seconds - final_duration,
+        current_distance_meters=current_distance_meters,
+        proposed_distance_meters=final_distance,
+        estimated_distance_savings_meters=current_distance_meters - final_distance,
+        metadata={
+            "movable_stop_count": movable_stop_count,
+            "model": _MODEL,
+            "route_call_count": route_call_count,
+        },
+    )
 
-    if not settings.ai_route_reorder_proposal_v1_enabled:
-        return _disabled_response(day_id)
 
-    _verify_trip_ownership(db, trip_id, user_id)
-    _verify_day_ownership(db, trip_id, day_id)
-
-    from app.services.itinerary import ItineraryService
-
-    itinerary = ItineraryService(db)
-    items = itinerary.list_items(day_id, user_id=user_id)
-    actual_current_order = [str(item.id) for item in items]
-
-    if payload.current_order != actual_current_order:
-        return _unavailable(
-            day_id,
-            actual_current_order,
-            reason="stale_current_order",
-            message=(
-                "This day's order changed since it was last loaded. Refresh "
-                "and try Plan My Day again."
-            ),
-        )
-
-    # Eligible = activity/meal with canonical coordinates already persisted.
-    # Everything else keeps its exact current slot in the returned order.
+def _build_movable_stops(items: List[Any]) -> Tuple[List[RouteableStop], Dict[str, Any]]:
+    """Eligible = activity/meal with canonical coordinates already persisted,
+    in the day's current position order. Everything else (flights, hotels,
+    notes, transit, or an eligible stop missing coordinates) is excluded and
+    keeps its exact current slot in the returned order."""
     movable_stops: List[RouteableStop] = []
     movable_items_by_id: Dict[str, Any] = {}
     for item in items:
@@ -184,6 +216,45 @@ def generate_route_reorder_proposal(
         )
         movable_stops.append(stop)
         movable_items_by_id[str(item.id)] = item
+    return movable_stops, movable_items_by_id
+
+
+def generate_route_reorder_proposal(
+    trip_id: UUID,
+    day_id: UUID,
+    user_id: UUID,
+    payload: RouteReorderProposalGenerateRequest,
+    db: Any,
+) -> RouteReorderProposalGenerateResponse:
+    """Generate a suggested stop order for one day, or an honest unavailable
+    result. Never writes anything.
+    """
+    settings = get_settings()
+
+    if not settings.ai_route_reorder_proposal_v1_enabled or not settings.route_reorder_proposal_v1_enabled:
+        return _disabled_response(day_id)
+
+    _verify_trip_ownership(db, trip_id, user_id)
+    _verify_day_ownership(db, trip_id, day_id)
+
+    from app.services.itinerary import ItineraryService
+
+    itinerary = ItineraryService(db)
+    items = itinerary.list_items(day_id, user_id=user_id)
+    actual_current_order = [str(item.id) for item in items]
+
+    if payload.current_order != actual_current_order:
+        return _unavailable(
+            day_id,
+            actual_current_order,
+            reason="stale_current_order",
+            message=(
+                "This day's order changed since it was last loaded. Refresh "
+                "and try Plan My Day again."
+            ),
+        )
+
+    movable_stops, movable_items_by_id = _build_movable_stops(items)
 
     if len(movable_stops) < 2:
         return _unavailable(
@@ -207,16 +278,17 @@ def generate_route_reorder_proposal(
             ),
         )
 
-    # Reuses the existing registered route-estimate service — one call, the
-    # same provider client, current order preserved, no matrix/optimization.
-    route_response = compute_route_estimate(
+    # First Google Routes call: the day's current order. Reuses the existing
+    # registered route-estimate service — same provider client, order
+    # preserved, no matrix/optimization.
+    current_route_response = compute_route_estimate(
         RouteEstimateRequest(stops=movable_stops),
         trip_id,
         day_id,
         user_id=user_id,
         db=db,
     )
-    if route_response.status != "success" or not route_response.estimates:
+    if current_route_response.status != "success" or not current_route_response.estimates:
         return _unavailable(
             day_id,
             actual_current_order,
@@ -227,7 +299,9 @@ def generate_route_reorder_proposal(
             ),
         )
 
-    prompt = _build_prompt(movable_stops, movable_items_by_id, route_response.estimates)
+    current_duration, current_distance = _sum_route_totals(current_route_response.estimates)
+
+    prompt = _build_prompt(movable_stops, movable_items_by_id, current_route_response.estimates)
     raw_response = _call_llm(prompt)
     if raw_response is None:
         return _unavailable(
@@ -252,6 +326,68 @@ def generate_route_reorder_proposal(
         )
     proposed_movable_order, rationale, move_reasons = validated
 
+    current_movable_order = [stop.item_id for stop in movable_stops]
+
+    if not _fixed_time_segments_respected(current_movable_order, proposed_movable_order, movable_items_by_id):
+        return _unavailable(
+            day_id,
+            actual_current_order,
+            reason="fixed_time_anchor_violated",
+            message=(
+                "AI route planning couldn't produce a suggestion that "
+                "honors this day's fixed times. Please try again."
+            ),
+        )
+
+    if proposed_movable_order == current_movable_order:
+        # The model itself judged the current order best — no need to spend
+        # a second Google Routes call to confirm that.
+        return _already_practical_response(
+            day_id,
+            actual_current_order,
+            current_duration,
+            current_distance,
+            route_call_count=1,
+            movable_stop_count=len(movable_stops),
+        )
+
+    # Second Google Routes call: the proposed order, only reachable once the
+    # generation passed structural + fixed-time validation and actually
+    # differs from the current order.
+    stop_by_id = {stop.item_id: stop for stop in movable_stops}
+    proposed_stops_ordered = [stop_by_id[item_id] for item_id in proposed_movable_order]
+    proposed_route_response = compute_route_estimate(
+        RouteEstimateRequest(stops=proposed_stops_ordered),
+        trip_id,
+        day_id,
+        user_id=user_id,
+        db=db,
+    )
+    if proposed_route_response.status != "success" or not proposed_route_response.estimates:
+        return _unavailable(
+            day_id,
+            actual_current_order,
+            reason="route_data_unavailable",
+            message=(
+                "Travel-time data isn't available for this day right now, "
+                "so AI route planning can't make an honest suggestion."
+            ),
+        )
+
+    proposed_duration, proposed_distance = _sum_route_totals(proposed_route_response.estimates)
+
+    if not _is_material_improvement(current_duration, proposed_duration, current_distance, proposed_distance):
+        return _already_practical_response(
+            day_id,
+            actual_current_order,
+            current_duration,
+            current_distance,
+            proposed_duration_seconds=proposed_duration,
+            proposed_distance_meters=proposed_distance,
+            route_call_count=2,
+            movable_stop_count=len(movable_stops),
+        )
+
     full_proposed_order = _splice_movable_order(actual_current_order, movable_ids, proposed_movable_order)
 
     return RouteReorderProposalGenerateResponse(
@@ -263,11 +399,87 @@ def generate_route_reorder_proposal(
         proposed_order=full_proposed_order,
         rationale=rationale,
         move_reasons=move_reasons,
+        current_duration_seconds=current_duration,
+        proposed_duration_seconds=proposed_duration,
+        estimated_savings_seconds=current_duration - proposed_duration,
+        current_distance_meters=current_distance,
+        proposed_distance_meters=proposed_distance,
+        estimated_distance_savings_meters=current_distance - proposed_distance,
         metadata={
             "movable_stop_count": len(movable_stops),
             "model": _MODEL,
+            "route_call_count": 2,
         },
     )
+
+
+def _sum_route_totals(estimates: List[Dict[str, Any]]) -> Tuple[int, int]:
+    """Sum duration/distance across every leg. Both figures come only from
+    the provider's own returned legs — never estimated or interpolated."""
+    duration = sum(int(leg.get("duration_seconds", 0)) for leg in estimates)
+    distance = sum(int(leg.get("distance_meters", 0)) for leg in estimates)
+    return duration, distance
+
+
+def _is_material_improvement(
+    current_duration_seconds: int,
+    proposed_duration_seconds: int,
+    current_distance_meters: int,
+    proposed_distance_meters: int,
+) -> bool:
+    """Conservative acceptance rule — see module docstring. A proposal is
+    surfaced as a change only when it clears one of two bars: a real
+    duration improvement, or (when duration is essentially unchanged) a
+    real distance improvement. Never accepts a proposal that worsens
+    duration just because distance improved."""
+    duration_savings = current_duration_seconds - proposed_duration_seconds
+    duration_threshold = min(
+        _DURATION_IMPROVEMENT_ABS_SECONDS, current_duration_seconds * _DURATION_IMPROVEMENT_PCT
+    )
+    if duration_threshold > 0 and duration_savings >= duration_threshold:
+        return True
+
+    duration_diff = abs(current_duration_seconds - proposed_duration_seconds)
+    if duration_diff <= _DURATION_SIMILAR_WINDOW_SECONDS:
+        distance_savings = current_distance_meters - proposed_distance_meters
+        distance_threshold = min(
+            _DISTANCE_IMPROVEMENT_ABS_METERS, current_distance_meters * _DISTANCE_IMPROVEMENT_PCT
+        )
+        if distance_threshold > 0 and distance_savings >= distance_threshold:
+            return True
+
+    return False
+
+
+def _fixed_time_segments_respected(
+    current_movable_order: List[str],
+    proposed_movable_order: List[str],
+    items_by_id: Dict[str, Any],
+) -> bool:
+    """Every movable stop with an explicit ``start_time`` is a fixed anchor:
+    it must stay in its exact current slot, and nothing may cross it.
+    Untimed stops may only be reordered within the contiguous segment
+    (before the first anchor, between two anchors, or after the last
+    anchor) they already occupy — never across an anchor."""
+    anchor_indices = {
+        i for i, item_id in enumerate(current_movable_order) if getattr(items_by_id[item_id], "start_time", None)
+    }
+    for i in anchor_indices:
+        if proposed_movable_order[i] != current_movable_order[i]:
+            return False
+
+    n = len(current_movable_order)
+    i = 0
+    while i < n:
+        if i in anchor_indices:
+            i += 1
+            continue
+        start = i
+        while i < n and i not in anchor_indices:
+            i += 1
+        if set(proposed_movable_order[start:i]) != set(current_movable_order[start:i]):
+            return False
+    return True
 
 
 def _splice_movable_order(
@@ -316,7 +528,7 @@ Stops in this day's current order:
 Real travel time between consecutive stops in the CURRENT order, from the app's route provider — do not invent any figure not listed here:
 {chr(10).join(leg_lines) if leg_lines else "(no leg data)"}
 
-Task: suggest a more practical order for these stops that reduces unnecessary backtracking, honors any fixed_time or day_part shown above, keeps sensible meal placement, and preserves the traveler's intent. If the current order is already reasonable, keep it unchanged — prefer minimal changes over churn. Never invent a location, travel time, or opening hour beyond what is given above. This is a suggested order, not a mathematically optimal one — do not use the words "optimal" or "perfect" anywhere in your response.
+Task: suggest a more practical order for these stops that reduces unnecessary backtracking, honors any fixed_time or day_part shown above, keeps sensible meal placement, and preserves the traveler's intent. Any stop with a fixed_time is a hard anchor — it cannot move from its position, and other stops cannot be reordered across it; you may only reorder untimed stops among themselves, within the stretch of stops between the same two fixed_time anchors (or before the first / after the last). If the current order is already reasonable, keep it unchanged — prefer minimal changes over churn. Never invent a location, travel time, or opening hour beyond what is given above. This is a suggested order, not a mathematically optimal one — do not use the words "optimal" or "perfect" anywhere in your response.
 
 Return ONLY a JSON object with exactly this shape (ids must be exactly the ids listed above, each exactly once):
 {{"proposed_order": ["id1", "id2", ...], "rationale": "one or two plain-English sentences", "move_reasons": {{"id": "short reason", "...": "only include an entry if it materially helps"}}}}"""
@@ -375,8 +587,11 @@ def _validate_generation(
     movable_ids: set,
     items_by_id: Dict[str, Any],
 ) -> Optional[Tuple[List[str], str, Dict[str, str]]]:
-    """Validate an LLM-generated proposal. Returns None (fail-closed) on any
-    mismatch — never silently repairs a malformed generation."""
+    """Validate an LLM-generated proposal's structure and copy safety.
+    Returns None (fail-closed) on any mismatch — never silently repairs a
+    malformed generation. Fixed-time anchor/segment validation happens
+    separately in ``_fixed_time_segments_respected`` once the current
+    movable order is available."""
     proposed = parsed.get("proposed_order")
     if not isinstance(proposed, list) or not all(isinstance(x, str) for x in proposed):
         return None
@@ -401,18 +616,5 @@ def _validate_generation(
             if _contains_claim_unsafe_words(reason):
                 return None
             move_reasons[item_id] = reason
-
-    # Fixed-time constraint: two movable stops that both carry an explicit
-    # start_time must keep their chronological relative order.
-    timed_ids = [
-        item_id for item_id in proposed if getattr(items_by_id[item_id], "start_time", None)
-    ]
-    for i in range(len(timed_ids)):
-        for j in range(i + 1, len(timed_ids)):
-            earlier_id, later_id = timed_ids[i], timed_ids[j]
-            earlier_time = items_by_id[earlier_id].start_time
-            later_time = items_by_id[later_id].start_time
-            if earlier_time > later_time:
-                return None
 
     return proposed, rationale, move_reasons

@@ -25,17 +25,54 @@ endpoint (`route_reorder_proposal_generate.py`, new flag
 `ai_route_reorder_proposal_v1_enabled`, default off) — verifies ownership +
 exact day membership, rejects <2 routeable stops or a stale current_order
 before any route-data/LLM work, reuses the existing `compute_route_estimate`
-Google Routes service (single call, current order preserved) and the
-existing `anthropic` REASONING provider (lazy-import/env-key/fail-closed,
-same pattern as `batched_reason_builder.py` — no new provider/model
-authority). The LLM only reorders eligible (activity/meal, located) stops;
-every other item (flight/hotel/note/transit, or an eligible stop missing
-coordinates) keeps its exact original slot. A generated proposal is
-validated server-side (exact item-set match, fixed-time/`start_time`
-relative order preserved, no "optimal"/"perfect" claim) before being
+Google Routes service and the existing `anthropic` REASONING provider
+(lazy-import/env-key/fail-closed, same pattern as
+`batched_reason_builder.py` — no new provider/model authority). The LLM
+only reorders eligible (activity/meal, located) stops; every other item
+(flight/hotel/note/transit, or an eligible stop missing coordinates) keeps
+its exact original slot. A generated proposal is validated server-side
+(exact item-set match, no "optimal"/"perfect" claim) before being
 returned — an invalid generation fails closed to `status="unavailable"`,
 never a guessed or silently-repaired order. No SQL. Visual proof:
 `docs/visual-proof/ai-route-planning-v1/`.
+
+**Patch (same PR #533): the LLM proposes, Google Routes verifies.** The
+first version of this PR returned the LLM's proposed order without ever
+routing it — an unverified guess could be labeled "a more practical order."
+Fixed: the current order is routed once; if the (structurally-validated)
+proposed order actually differs, it is routed a second time (still just the
+existing single-call `compute_route_estimate`, no matrix, no new provider
+call, no extra LLM call); a changed order is only surfaced when the routed
+comparison clears a conservative threshold (≥5 min/10% duration
+improvement, whichever is smaller — or, when duration is within 2 minutes,
+≥1 km/10% distance improvement, whichever is smaller; a proposal that
+worsens duration is never accepted just because distance improved). When
+the LLM already returns the current order, or the routed comparison
+doesn't clear the bar, the response is `status="success",
+reason="current_order_already_practical"` with `proposed_order ==
+current_order` and an honest deterministic message — the frontend
+(`DayPlanModal`'s `RouteSuggestionSection`) checks this `reason` and
+renders no Apply action in that case. The response now carries typed,
+provider-derived evidence fields (`current_duration_seconds`,
+`proposed_duration_seconds`, `estimated_savings_seconds`,
+`current_distance_meters`, `proposed_distance_meters`,
+`estimated_distance_savings_meters`) computed only from real Google Routes
+legs, never LLM output; the frontend renders a deterministic one-line
+summary ("Estimated travel: about N minutes less.") built only from those
+fields. Fixed-time stops (`start_time` set) are now real anchors: they must
+stay in their exact routeable-order slot, and untimed stops may only be
+reordered within the segment (before/between/after anchors) they already
+occupy — a proposal that crosses an anchor is rejected
+(`reason="fixed_time_anchor_violated"`), not silently repaired. Generation
+now also requires the existing apply flag
+(`route_reorder_proposal_v1_enabled`) to be on, in addition to
+`ai_route_reorder_proposal_v1_enabled` — a proposal is never generated for
+a day where applying it would be impossible. **Enabling the full user-facing
+flow requires all of:** `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED=true`,
+`ROUTE_REORDER_PROPOSAL_V1_ENABLED=true`, `ROUTE_ESTIMATE_V1_ENABLED=true`,
+`ANTHROPIC_API_KEY`, `GOOGLE_ROUTES_API_KEY` — any missing piece fails
+closed to `disabled`/`unavailable` before any expensive work, never a
+guess.
 
 ### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (PR #532)
 
