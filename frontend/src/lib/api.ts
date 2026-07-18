@@ -33,6 +33,7 @@ import type {
   RouteEstimateResponse,
   RouteQualityDiagnosticResponse,
   RouteReorderApplyResponse,
+  RouteReorderProposalGenerateResponse,
 } from "@/types";
 import { supabase } from "./supabase";
 import { normalizeConciergeResponse } from "./concierge/types";
@@ -443,6 +444,28 @@ export async function fetchRouteQualityDiagnostic(
 ): Promise<RouteQualityDiagnosticResponse> {
   return apiFetch<RouteQualityDiagnosticResponse>(
     `/itinerary/${tripId}/days/${dayId}/route-quality-diagnostic`,
+  );
+}
+
+/**
+ * POST the read-only proposal-generation endpoint (AI Route Planning v1).
+ * Only ever called from an explicit "Plan My Day" click — never on render,
+ * day switch, or refresh. Sends the day's known current order so the server
+ * can reject a stale request before doing any route-data or LLM work.
+ * Never writes anything.
+ */
+export async function generateRouteReorderProposal(
+  tripId: string,
+  dayId: string,
+  currentOrder: string[],
+): Promise<RouteReorderProposalGenerateResponse> {
+  const payload = toSnake({ currentOrder });
+  return apiFetch<RouteReorderProposalGenerateResponse>(
+    `/itinerary/${tripId}/days/${dayId}/route-reorder-proposal/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }
 

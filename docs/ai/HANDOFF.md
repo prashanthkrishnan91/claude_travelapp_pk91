@@ -1,8 +1,112 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-10 (remove-itinerary-diagnostics, this branch)
+Last updated: 2026-07-11 (ai-route-planning-flow, this branch)
 
-### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (this branch)
+### AI Route Planning v1 — real user flow shipped, triggered from "Plan My Day" (this branch)
+
+First PR to deliver the actual AI route-planning **user outcome** (prior PRs
+#525–#530 were foundation/diagnostic-only; PR #532 then removed the
+debug-feeling "Review day flow"/"Check route readiness" UI those PRs added).
+When a user clicks the existing "Plan My Day" button on a day that already
+has ≥2 routeable (activity/meal, located) stops, the existing result modal
+(`DayPlanModal`) now also shows a "Here is a more practical order for this
+day" section: current order, AI-suggested order, a short plain-English
+rationale, and Cancel/"Apply this order" controls — reusing
+`ReorderProposalPreview` (extracted to its own file,
+`components/trips/ReorderProposalPreview.tsx`, previously an inert
+`proposal={null}` render inside `ItineraryDayColumn.tsx`, now removed from
+there). Confirming calls the existing PR #528 apply endpoint
+(`/route-reorder-proposal/apply`); nothing is written during preview or on
+cancel. Applying refreshes the day's local item order; the existing inline
+route connectors remain the canonical travel-time display, unchanged.
+
+Backend: new read-only `POST /itinerary/{trip_id}/days/{day_id}/route-reorder-proposal/generate`
+endpoint (`route_reorder_proposal_generate.py`, new flag
+`ai_route_reorder_proposal_v1_enabled`, default off) — verifies ownership +
+exact day membership, rejects <2 routeable stops or a stale current_order
+before any route-data/LLM work, reuses the existing `compute_route_estimate`
+Google Routes service and the existing `anthropic` REASONING provider
+(lazy-import/env-key/fail-closed, same pattern as
+`batched_reason_builder.py` — no new provider/model authority). The LLM
+only reorders eligible (activity/meal, located) stops; every other item
+(flight/hotel/note/transit, or an eligible stop missing coordinates) keeps
+its exact original slot. A generated proposal is validated server-side
+(exact item-set match, no "optimal"/"perfect" claim) before being
+returned — an invalid generation fails closed to `status="unavailable"`,
+never a guessed or silently-repaired order. No SQL. Visual proof:
+`docs/visual-proof/ai-route-planning-v1/`.
+
+**Patch (same PR #533): the LLM proposes, Google Routes verifies.** The
+first version of this PR returned the LLM's proposed order without ever
+routing it — an unverified guess could be labeled "a more practical order."
+Fixed: the current order is routed once; if the (structurally-validated)
+proposed order actually differs, it is routed a second time (still just the
+existing single-call `compute_route_estimate`, no matrix, no new provider
+call, no extra LLM call); a changed order is only surfaced when the routed
+comparison clears a conservative threshold (≥5 min/10% duration
+improvement, whichever is smaller — or, when duration is within 2 minutes,
+≥1 km/10% distance improvement, whichever is smaller; a proposal that
+worsens duration is never accepted just because distance improved). When
+the LLM already returns the current order, or the routed comparison
+doesn't clear the bar, the response is `status="success",
+reason="current_order_already_practical"` with `proposed_order ==
+current_order` and an honest deterministic message — the frontend
+(`DayPlanModal`'s `RouteSuggestionSection`) checks this `reason` and
+renders no Apply action in that case. The response now carries typed,
+provider-derived evidence fields (`current_duration_seconds`,
+`proposed_duration_seconds`, `estimated_savings_seconds`,
+`current_distance_meters`, `proposed_distance_meters`,
+`estimated_distance_savings_meters`) computed only from real Google Routes
+legs, never LLM output; the frontend renders a deterministic one-line
+summary ("Estimated travel: about N minutes less.") built only from those
+fields. Fixed-time stops (`start_time` set) are now real anchors: they must
+stay in their exact routeable-order slot, and untimed stops may only be
+reordered within the segment (before/between/after anchors) they already
+occupy — a proposal that crosses an anchor is rejected
+(`reason="fixed_time_anchor_violated"`), not silently repaired. Generation
+now also requires the existing apply flag
+(`route_reorder_proposal_v1_enabled`) to be on, in addition to
+`ai_route_reorder_proposal_v1_enabled` — a proposal is never generated for
+a day where applying it would be impossible. **Enabling the full user-facing
+flow requires all of:** `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED=true`,
+`ROUTE_REORDER_PROPOSAL_V1_ENABLED=true`, `ROUTE_ESTIMATE_V1_ENABLED=true`,
+`ANTHROPIC_API_KEY`, `GOOGLE_ROUTES_API_KEY` — any missing piece fails
+closed to `disabled`/`unavailable` before any expensive work, never a
+guess.
+
+**Patch 2 (same PR #533): day-part sections (Morning/Afternoon/Evening/
+Unscheduled) — the same sections `ItineraryDayColumn` renders — are now
+hard boundaries.** A routeable stop may only be reordered among other
+stops in its own rendered day-part section; it can never cross into
+another. `_get_item_day_part` in `route_reorder_proposal_generate.py`
+ports `getItemDayPart` from `ItineraryDayColumn.tsx` exactly (explicit
+`details.dayPart` → `details.timeLabel` keywords → canonical `start_time`
+hour bucketing → unscheduled), so the split never drifts from what's
+actually rendered. This is validated deterministically after generation
+(`_day_part_boundaries_respected`) — the LLM is never trusted to honor it
+merely because the prompt says so. Both Google Routes calls (current order
+and, if it changed, the proposed order) now use this canonical
+Morning→Afternoon→Evening→Unscheduled stop sequence, not raw database
+position order — the same sequence shown in the preview. Fixed-time
+anchors still work exactly as before, now composing with day-part
+boundaries (an anchor can't be used to smuggle a stop across a section).
+
+New response fields `current_display_order`/`proposed_display_order`
+(every day item, not just movable ones, bucketed into canonical section
+order) are what the frontend preview (`ReorderProposalPreview`) now
+renders — `current_order`/`proposed_order` are unchanged in shape from PR C
+(the full day's items in raw position order) and remain exactly what the
+existing apply endpoint (#528) requires; display order is never sent to
+apply. `_splice_movable_order` was rewritten to correctly map a
+canonical-order accepted sequence back onto each bucket's original
+raw-position slots (previously the mapping assumed the proposed sequence
+was already in raw-position order, which broke once canonical bucket order
+could differ from it). No SQL, no new provider, no extra LLM/route call
+(still capped at two Google Routes calls + one LLM call), no change to the
+Plan My Day trigger, modal structure, apply endpoint, or material-
+improvement thresholds.
+
+### Journey Desk cleanup: route diagnostic/review affordances removed from normal UI (PR #532)
 
 `RouteQualityDiagnosticNote` ("Check route readiness", PR B) and `DayFlowReview`
 ("Review day flow", PR D) are **no longer rendered** in `ItineraryDayColumn.tsx`

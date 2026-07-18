@@ -183,8 +183,20 @@ export interface RouteQualityDiagnosticResponse {
 // apply contract validates and writes on explicit user confirmation.
 
 export interface ReorderProposal {
+  /** Raw position-order item IDs — what applyRouteReorderProposal always sends. */
   currentOrder: string[];
   proposedOrder: string[];
+  /**
+   * Display-only ordering (e.g. canonical Morning/Afternoon/Evening/
+   * Unscheduled section order matching ItineraryDayColumn). When present,
+   * the preview renders these instead of currentOrder/proposedOrder — but
+   * apply always uses currentOrder/proposedOrder, never these.
+   */
+  currentDisplayOrder?: string[];
+  proposedDisplayOrder?: string[];
+  /** Short plain-English reason for the suggested change, if any. */
+  rationale?: string;
+  moveReasons?: Record<string, string>;
 }
 
 export type RouteReorderApplyStatus = "disabled" | "rejected" | "applied";
@@ -195,6 +207,40 @@ export interface RouteReorderApplyResponse {
   message: string;
   dayId: string;
   order: string[];
+}
+
+// ─── Route Reorder Proposal — AI generation (AI Route Planning v1) ───────────
+// Triggered only by an explicit "Plan My Day" click. Read-only — generation
+// never writes; applying a proposal reuses RouteReorderApplyResponse above.
+
+export type RouteReorderProposalGenerateStatus = "disabled" | "unavailable" | "success";
+
+export interface RouteReorderProposalGenerateResponse {
+  status: RouteReorderProposalGenerateStatus;
+  /** Machine-readable cause, e.g. "proposal_generated", "current_order_already_practical". */
+  reason: string;
+  message: string;
+  dayId: string;
+  /** Raw position-order item IDs — the shape the existing apply endpoint (#528) requires. */
+  currentOrder: string[];
+  proposedOrder: string[];
+  /**
+   * Display-only ordering: every day item bucketed into the same canonical
+   * Morning/Afternoon/Evening/Unscheduled sections ItineraryDayColumn
+   * renders. The preview must render these, not currentOrder/proposedOrder,
+   * so what's shown always matches the visible itinerary.
+   */
+  currentDisplayOrder: string[];
+  proposedDisplayOrder: string[];
+  rationale: string;
+  moveReasons: Record<string, string>;
+  /** Provider-derived (Google Routes) evidence — never LLM-authored. Null when no route comparison was made. */
+  currentDurationSeconds?: number | null;
+  proposedDurationSeconds?: number | null;
+  estimatedSavingsSeconds?: number | null;
+  currentDistanceMeters?: number | null;
+  proposedDistanceMeters?: number | null;
+  estimatedDistanceSavingsMeters?: number | null;
 }
 
 // ─── Travel Card ─────────────────────────────────────────────────────────────

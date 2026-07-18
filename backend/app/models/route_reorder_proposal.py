@@ -10,7 +10,7 @@ and the server verifies them before writing anything.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -46,4 +46,91 @@ class RouteReorderApplyResponse(BaseModel):
     message: str
     day_id: str
     order: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ── Generate (AI Route Planning v1 — proposal generation) ──────────────────
+#
+# Governed by docs/ai/AI_ROUTE_PLANNING_V1_ADR.md. Read-only: generation never
+# writes. The caller supplies the day's actual current order (as it knows it)
+# so the server can detect a stale/mismatched request before doing any
+# route-data or LLM work. A successful proposal is shaped to be handed
+# straight to ``RouteReorderApplyRequest`` (current_order/proposed_order) —
+# the same apply contract from PR C, unchanged.
+
+ReorderProposalGenerateStatus = Literal["disabled", "unavailable", "success"]
+
+
+class RouteReorderProposalGenerateRequest(BaseModel):
+    """The caller's known current order for this day, used for staleness
+    detection before any route-data or LLM work happens."""
+
+    current_order: List[str] = Field(default_factory=list)
+
+
+class RouteReorderProposalGenerateResponse(BaseModel):
+    """Result of an AI route-reorder proposal generation attempt.
+
+    ``status`` values:
+    - ``"disabled"``: a required feature flag is off (either
+      ``ai_route_reorder_proposal_v1_enabled`` or
+      ``route_reorder_proposal_v1_enabled`` — generation never returns an
+      actionable proposal when the apply path is unavailable).
+    - ``"unavailable"``: no proposal could be honestly generated (too few
+      routeable stops, stale current_order, route data unavailable for
+      either the current or proposed order, LLM unavailable, a generated
+      proposal failed structural/claim-safety validation, or it crossed a
+      fixed-time anchor). ``reason`` carries the machine-readable cause;
+      ``proposed_order`` is empty.
+    - ``"success"``: either a verified, materially-better order
+      (``reason="proposal_generated"``) or an honest "no material
+      improvement" result (``reason="current_order_already_practical"``,
+      where ``proposed_order`` always equals ``current_order`` — the
+      frontend must not offer an Apply action in that case).
+
+    ``proposed_order`` (when non-empty) always contains exactly the same
+    item IDs as ``current_order`` (the full day, in raw position order —
+    exactly what the existing apply endpoint (#528) requires), reordered
+    only among the eligible activity/meal stops the model reasoned about,
+    and only within their existing day-part section and fixed-time
+    segment.
+
+    ``current_display_order``/``proposed_display_order`` are a SEPARATE,
+    display-only shape: every day item (not just movable ones) bucketed
+    into the same Morning/Afternoon/Evening/Unscheduled sections
+    ``ItineraryDayColumn`` renders, in that canonical section order. The
+    frontend preview must render these (not ``current_order``/
+    ``proposed_order``, which stay in raw position order for the apply
+    contract) so what the user sees always matches the rendered itinerary.
+    Applying a proposal still only ever sends ``current_order``/
+    ``proposed_order`` to the existing apply endpoint — display order is
+    never written anywhere.
+
+    ``current_duration_seconds``/``proposed_duration_seconds``/
+    ``current_distance_meters``/``proposed_distance_meters`` and their
+    ``estimated_*_savings_*`` deltas are always computed from real Google
+    Routes legs returned by the existing route-estimate service — never
+    from LLM output. They are ``None`` only when no route comparison was
+    made (``disabled``/most ``unavailable`` reasons).
+
+    Never fabricates a travel time, distance, or location that wasn't
+    already available from the app's existing route/coordinate data.
+    """
+
+    status: ReorderProposalGenerateStatus
+    reason: str
+    message: str
+    day_id: str
+    current_order: List[str] = Field(default_factory=list)
+    proposed_order: List[str] = Field(default_factory=list)
+    current_display_order: List[str] = Field(default_factory=list)
+    proposed_display_order: List[str] = Field(default_factory=list)
+    rationale: str = ""
+    move_reasons: Dict[str, str] = Field(default_factory=dict)
+    current_duration_seconds: Optional[int] = None
+    proposed_duration_seconds: Optional[int] = None
+    estimated_savings_seconds: Optional[int] = None
+    current_distance_meters: Optional[int] = None
+    proposed_distance_meters: Optional[int] = None
+    estimated_distance_savings_meters: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
