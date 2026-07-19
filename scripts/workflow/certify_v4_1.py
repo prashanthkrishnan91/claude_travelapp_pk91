@@ -36,11 +36,10 @@ SELF_AUDIT_ANCHORS = [
 ]
 
 USAGE_LEDGER_ANCHORS = [
-    "Prompt ID",
-    "Phase",
-    "Linked PR",
-    "Δ total",
+    "PR / Branch",
+    "Follow-ups",
     "Waste",
+    "Lesson",
 ]
 
 SNAPSHOT_SCRIPT_ANCHORS = [
