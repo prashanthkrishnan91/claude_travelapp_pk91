@@ -1,10 +1,12 @@
 # HANDOFF — current state only
 
 ## Active work
-- No open implementation PR.
+- Cluster 2 context-tax reduction (SETUP_AUDIT.md) is the current workflow slice, branch
+  `claude/context-tax-reduction-cluster-2-65e2xb`, PR #536.
+- No product implementation PR is open.
 - AI Route Planning v1 shipped in PR #533.
 - Claude Code workflow Cluster 1 shipped in PR #535.
-- Next planned workflow improvement: context-tax reduction from SETUP_AUDIT.md Cluster 2.
+- Next step: review/merge of PR #536.
 
 ## Blocked / waiting on user
 - AI Route Planning v1's user-facing flow requires all of `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED`,

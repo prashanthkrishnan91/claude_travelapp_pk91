@@ -4,8 +4,7 @@ Archived history: `docs/ai/USAGE_LEDGER_ARCHIVE_2026H1.md`
 
 | Date | PR / Branch | Level | Chat | Follow-ups | Waste | Lesson |
 |------|-------------|-------|------|------------|-------|--------|
-| 2026-07-19 | claude/context-tax-reduction-cluster-2-65e2xb | 0 | new-chat | 0 | none | Archiving instead of appending is what actually pays back the read-first tax — HANDOFF's context cost came from history, not current-state content. |
-| 2026-07-19 | claude/context-tax-reduction-cluster-2-65e2xb (PR #536 CI fix) | 0 | same-chat | 1 | necessary-follow-up | `certify_v4_1.py` hard-asserted the old 26-column ledger's field names; a schema-replacement PR must also update anchor-checking scripts, not just the readiness gate. |
+| 2026-07-19 | claude/context-tax-reduction-cluster-2-65e2xb | 0 | new-chat | 1 | preventable-follow-up | Schema-replacement PRs must audit every downstream reader/writer (certify script, snapshot/backfill tools, docs), not only the readiness gate. |
 
 Rules:
 - One row per PR.
