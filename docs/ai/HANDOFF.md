@@ -1,6 +1,17 @@
 # HANDOFF — Current Repo State
 
-Last updated: 2026-07-11 (ai-route-planning-flow, this branch)
+Last updated: 2026-07-19 (claude/ship-pr-workflow-skill-mgrj0v, this branch)
+
+### Workflow: `ship-pr` skill added (this branch)
+
+Implemented Cluster 1 from the merged root-level `SETUP_AUDIT.md`: added
+`.claude/skills/ship-pr/SKILL.md` (single-pass PR packaging — body from
+`.github/pull_request_template.md`, USAGE_LEDGER row, HANDOFF update, lint,
+`ai_pr_readiness_check.py --pr-body-file ... --base-ref origin/main`, all
+before the first push) and pointed CLAUDE.md's "PR Readiness Gate" section
+at it. No numeric-PR-number replacement ritual — the gate does not require
+one; ledger rows are keyed by branch name pre-open. No product/runtime
+impact. The product state below (AI Route Planning v1) is unaffected.
 
 ### AI Route Planning v1 — real user flow shipped, triggered from "Plan My Day" (this branch)
 

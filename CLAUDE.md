@@ -71,7 +71,12 @@ For Level 1+ PRs or any failed validation, run `.claude/skills/workflow-retrospe
 
 ## PR Readiness Gate (hard rules)
 
-Before opening or updating any Level 1+ PR, run `python3 scripts/workflow/ai_pr_readiness_check.py`.
+Open every PR through the `ship-pr` skill (`.claude/skills/ship-pr/SKILL.md`): PR body copied
+verbatim from `.github/pull_request_template.md`, `docs/ai/USAGE_LEDGER.md` row and `docs/ai/HANDOFF.md`
+update packaged in the same commit as the code, and
+`python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file <body file> --base-ref origin/main`
+run to PASS before the first push. Never run the check without `--pr-body-file` — it silently
+skips section checks and reports a false PASS. Fix failures before the initial push.
 
 - A PR body must not claim usage tracking unless `docs/ai/USAGE_LEDGER.md` actually changed in this PR, or usage is explicitly marked "unavailable — <reason>".
 - **Fresh chat is the default** for new PRs, new slices, and new blockers. Same chat only for: open-PR patches or tightly adjacent safe continuation.
