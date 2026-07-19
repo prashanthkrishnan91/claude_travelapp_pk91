@@ -107,7 +107,8 @@ Follow `docs/ai/AGENT_ROUTER.md`. Do not run every agent by default. Park new ex
 
 Read only what the task needs. Common anchors:
 
-- `docs/ai/HANDOFF.md` — compact current state only (no historical PR log; replace/summarize, never append)
+- `docs/ai/HANDOFF.md` — current state only, hard cap 150 lines; if it exceeds the cap, truncate it in the current PR before starting new work. History lives in git, not this file.
+- `docs/ai/USAGE_LEDGER.md` — slim current decision log (July 2026 onward); historical rows live in `docs/ai/USAGE_LEDGER_ARCHIVE_2026H1.md` (not a read-first file — look it up only when researching past PRs).
 - `docs/ai/AI_REPO_OPERATING_SYSTEM.md` — consolidated OS v4
 - `docs/ai/SAFETY_PACKS_AND_ARCHETYPES.md` — reusable contracts the OS owns
 - `docs/ai/KNOWN_FAILURE_MODES.md` — project-specific failure patterns
