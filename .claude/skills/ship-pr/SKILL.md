@@ -29,9 +29,11 @@ Follow the steps in order; do not reorder or skip.
    repeatedly-observed miss — don't do that either.
 4. **HANDOFF.md update in the same commit** — replace or summarize the current-state section.
    Never append a new dated entry (history lives in git).
-5. **Lint before commit when any JS/TS file changed.** If `node_modules` is absent, run
-   `npm ci` once, then `npm run lint`. If install is impossible in this session, state that
-   explicitly under Validation rather than skipping silently.
+5. **Lint before commit when any JS/TS frontend file changed.** Run lint from the actual
+   frontend package (this repo has no root `package.json`; the frontend package lives under
+   `frontend/`). If `frontend/node_modules` is absent, run `npm --prefix frontend ci` once,
+   then `npm --prefix frontend run lint`. If installation is impossible, state that explicitly
+   under Validation instead of skipping silently.
 6. **Run the gate against the real body BEFORE pushing:**
    `python3 scripts/workflow/ai_pr_readiness_check.py --pr-body-file <body file> --base-ref origin/main`
    Never run it without `--pr-body-file`: section checks are silently skipped and report a
