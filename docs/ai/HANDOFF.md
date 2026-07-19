@@ -1,12 +1,12 @@
 # HANDOFF — current state only
 
 ## Active work
-- Cluster 2 context-tax reduction (SETUP_AUDIT.md) is the current workflow slice, branch
-  `claude/context-tax-reduction-cluster-2-65e2xb`, PR #536.
+- Docs-only slice: root-level `DOSSIER.md` (interview dossier synthesized from repo evidence),
+  branch `claude/analytics-interview-dossier-becb4g`. No app code touched.
 - No product implementation PR is open.
-- AI Route Planning v1 shipped in PR #533.
-- Claude Code workflow Cluster 1 shipped in PR #535.
-- Next step: review/merge of PR #536.
+- AI Route Planning v1 shipped in PR #533; workflow Cluster 1 (ship-pr) in #535; Cluster 2
+  context-tax reduction merged in #536.
+- Next step: review/merge of the dossier PR, then SETUP_AUDIT Clusters 3–7 remain available.
 
 ## Blocked / waiting on user
 - AI Route Planning v1's user-facing flow requires all of `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED`,
