@@ -1,51 +1,66 @@
 #!/usr/bin/env bash
 # scripts/ai/usage_snapshot.sh
 #
-# Manual command: capture AI usage snapshots before/after a prompt for PR/delta auditing.
+# Manual command: capture AI usage snapshots before/after a prompt, print a PR-body
+# usage note, and (optionally) append a slim decision row to docs/ai/USAGE_LEDGER.md.
 # Run: bash scripts/ai/usage_snapshot.sh [OPTIONS]
 #
-# Per-prompt delta workflow:
+# The committed ledger (docs/ai/USAGE_LEDGER.md) is a slim one-row-per-PR *decision*
+# log: Date | PR / Branch | Level | Chat | Follow-ups | Waste | Lesson. It does NOT
+# carry token/cost/delta/prompt-id/phase/model/linked-PR detail — that detail stays in
+# the local raw snapshot (.ai/usage/, gitignored) and in the printed PR-body usage note.
+#
+# Slim-ledger workflow:
+#   bash scripts/ai/usage_snapshot.sh --pr 123 --level 1 --chat-strategy new-chat \
+#     --follow-up-patches 0 --waste-classification none \
+#     --efficiency-lesson "one-line lesson, max 25 words" --append-ledger
+#
+# Per-prompt token delta (still useful for the PR-body usage note, not the ledger row):
 #   # 1. Before Claude work — save baseline:
 #   bash scripts/ai/usage_snapshot.sh --save-baseline before-pr-123
 #
-#   # 2. After Claude work — capture delta and append ledger row:
-#   bash scripts/ai/usage_snapshot.sh --pr 123 --prompt-id initial --phase initial \
+#   # 2. After Claude work — capture delta + print usage note + append ledger row:
+#   bash scripts/ai/usage_snapshot.sh --pr 123 --level 1 --chat-strategy new-chat \
 #     --delta-from-baseline .ai/usage/baseline-before-pr-123.json \
-#     --repo-area workflow/docs --model claude-sonnet-4-6 \
-#     --main-drivers "anchor reads, file writes" --append-ledger
-#
-#   # 3. Follow-up patch delta linked to original PR:
-#   bash scripts/ai/usage_snapshot.sh --pr 124 --prompt-id patch-1 --phase follow-up \
-#     --linked-pr 123 --delta-from-baseline .ai/usage/baseline-before-patch1.json \
-#     --waste-classification preventable-follow-up --append-ledger
+#     --main-drivers "anchor reads, file writes" --waste-classification none \
+#     --efficiency-lesson "lesson" --append-ledger
 #
 # What it does:
-# - Calls `npx ccusage@latest session --json` for session token/cost data.
+# - Calls `npx ccusage@latest session --json` for session token/cost data (local only).
 # - Handles ccusage shapes: {sessions/totals}, {data/summary}, single object, bare array.
 # - Falls back gracefully if ccusage, npx, jq, or python3 are unavailable.
 # - Writes a raw JSON snapshot to .ai/usage/ (gitignored, never committed).
 # - Saves numeric totals to .ai/usage/baseline-<name>.json when --save-baseline is used.
-# - Computes per-prompt token delta when --delta-from-baseline is provided.
-# - Prints a compact usage note for the PR body.
-# - Prints a sanitized 26-column Markdown ledger row for docs/ai/USAGE_LEDGER.md.
-# - With --append-ledger, appends the ledger row to docs/ai/USAGE_LEDGER.md.
+# - Computes per-prompt token delta when --delta-from-baseline is provided (usage note only).
+# - Prints a compact usage note for the PR body (carries model/drivers/token detail).
+# - Prints a sanitized 7-column Markdown ledger row for docs/ai/USAGE_LEDGER.md.
+# - With --append-ledger, appends the 7-column ledger row to docs/ai/USAGE_LEDGER.md.
 #
-# CLI flags:
-#   --pr <number-or-url>             PR number or URL
+# CLI flags written into the committed ledger row:
+#   --pr <number-or-branch>          PR number, URL, or branch name → PR / Branch column
+#                                     (defaults to the current git branch if omitted)
+#   --level <0-3>                    Severity level → Level column (default: unavailable)
+#   --chat-strategy <value>          same-chat | new-chat | unknown → Chat column
+#   --follow-up-patches <n>          Number of follow-up patches → Follow-ups column
+#   --waste-classification <value>   none | preventable-follow-up | necessary-follow-up |
+#                                     exploration | unknown → Waste column
+#   --efficiency-lesson <text>       One-line lesson, max 25 words → Lesson column
+#
+# Legacy CLI flags (kept for backward compatibility; feed the raw local snapshot and
+# the printed PR-body usage note ONLY — none of these are written to the committed
+# ledger row anymore):
 #   --session-url <url>              Claude session URL
 #   --model <name>                   Model name (e.g. claude-sonnet-4-6)
-#   --chat-strategy <value>          same-chat | new-chat | unknown
 #   --repo-area <text>               Repo area/stage (e.g. workflow/docs)
 #   --prompt-id <text>               Prompt/patch ID (e.g. initial, patch-1, patch-2)
 #   --phase <value>                  initial | follow-up | audit | merge-gate | backfill | unknown
 #   --linked-pr <number-or-url>      Original PR this follow-up belongs to
 #   --main-drivers <text>            What consumed tokens
-#   --follow-up-patches <n>          Number of follow-up patches required
-#   --waste-classification <value>   none | preventable-follow-up | necessary-follow-up | exploration | unknown
-#   --efficiency-lesson <text>       One-line efficiency lesson
 #   --save-baseline <name>           Save current totals to .ai/usage/baseline-<name>.json
 #   --delta-from-baseline <path>     Compute per-prompt delta from this baseline file
-#   --append-ledger                  Append sanitized row to docs/ai/USAGE_LEDGER.md
+#
+# Other flags:
+#   --append-ledger                  Append the 7-column row to docs/ai/USAGE_LEDGER.md
 #   --help                           Print this help
 #
 # This script is NOT run automatically. It is a manual step before opening a PR.
@@ -54,6 +69,7 @@
 
 # ── Defaults ────────────────────────────────────────────────────────────────
 OPT_PR="unknown"
+OPT_LEVEL="unavailable"
 OPT_SESSION_URL="unknown"
 OPT_MODEL="unknown"
 OPT_CHAT_STRATEGY="unknown"
@@ -72,27 +88,30 @@ OPT_APPEND_LEDGER=false
 # ── Argument parsing ───────────────────────────────────────────────────────────
 print_help() {
   printf 'Usage: bash scripts/ai/usage_snapshot.sh [OPTIONS]\n\n'
-  printf 'Per-prompt delta workflow:\n'
-  printf '  1. Before work: --save-baseline before-pr-N\n'
-  printf '  2. After work:  --pr N --prompt-id initial --phase initial \\\n'
-  printf '                  --delta-from-baseline .ai/usage/baseline-before-pr-N.json \\\n'
-  printf '                  --append-ledger\n\n'
-  printf 'Options:\n'
-  printf '  --pr <number-or-url>             PR number or URL\n'
+  printf 'Slim-ledger workflow (writes docs/ai/USAGE_LEDGER.md 7-column row):\n'
+  printf '  --pr N --level 1 --chat-strategy new-chat --follow-up-patches 0 \\\n'
+  printf '  --waste-classification none --efficiency-lesson "..." --append-ledger\n\n'
+  printf 'Columns written to the committed ledger row:\n'
+  printf '  --pr <number-or-branch>          PR / Branch column (default: current git branch)\n'
+  printf '  --level <0-3>                    Level column (default: unavailable)\n'
+  printf '  --chat-strategy <value>          Chat column: same-chat | new-chat | unknown\n'
+  printf '  --follow-up-patches <n>          Follow-ups column\n'
+  printf '  --waste-classification <value>   Waste column: none | preventable-follow-up |\n'
+  printf '                                    necessary-follow-up | exploration | unknown\n'
+  printf '  --efficiency-lesson <text>       Lesson column (max 25 words — warns if exceeded)\n\n'
+  printf 'Legacy flags (local snapshot + PR-body usage note only — NOT written to the\n'
+  printf 'committed ledger row):\n'
   printf '  --session-url <url>              Claude session URL\n'
   printf '  --model <name>                   Model (e.g. claude-sonnet-4-6)\n'
-  printf '  --chat-strategy <value>          same-chat | new-chat | unknown\n'
   printf '  --repo-area <text>               Repo area/stage\n'
   printf '  --prompt-id <text>               Prompt/patch ID (e.g. initial, patch-1)\n'
   printf '  --phase <value>                  initial | follow-up | audit | merge-gate | backfill | unknown\n'
   printf '  --linked-pr <number-or-url>      Original PR this follow-up belongs to\n'
   printf '  --main-drivers <text>            What consumed tokens\n'
-  printf '  --follow-up-patches <n>          Number of follow-up patches\n'
-  printf '  --waste-classification <value>   none | preventable-follow-up | necessary-follow-up | exploration | unknown\n'
-  printf '  --efficiency-lesson <text>       One-line efficiency lesson\n'
   printf '  --save-baseline <name>           Save totals to .ai/usage/baseline-<name>.json\n'
-  printf '  --delta-from-baseline <path>     Compute delta from this baseline file\n'
-  printf '  --append-ledger                  Append row to docs/ai/USAGE_LEDGER.md\n'
+  printf '  --delta-from-baseline <path>     Compute delta from this baseline file\n\n'
+  printf 'Other:\n'
+  printf '  --append-ledger                  Append the 7-column row to docs/ai/USAGE_LEDGER.md\n'
   printf '  --help                           Print this help\n'
   exit 0
 }
@@ -100,6 +119,7 @@ print_help() {
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --pr)                    OPT_PR="${2:-unknown}"; shift 2 ;;
+    --level)                 OPT_LEVEL="${2:-unavailable}"; shift 2 ;;
     --session-url)           OPT_SESSION_URL="${2:-unknown}"; shift 2 ;;
     --model)                 OPT_MODEL="${2:-unknown}"; shift 2 ;;
     --chat-strategy)         OPT_CHAT_STRATEGY="${2:-unknown}"; shift 2 ;;
@@ -296,11 +316,33 @@ print(json.dumps({
 fi
 # If neither jq nor python3: snapshot skipped, usage note and ledger row still print
 
-# ── Sanitized ledger row (26 columns) ───────────────────────────────────────────────
-# Date|PR|PromptID|Phase|LinkedPR|Area|Session|Model|Chat|Source|
-# In|Out|CacheRead|CacheCreate|Total|Cost|
-# ΔIn|ΔOut|ΔCacheRead|ΔCacheCreate|ΔTotal|ΔCost|Waste|Drivers|FollowUp|Lesson
-LEDGER_ROW="| $DATE_ONLY | $OPT_PR | $OPT_PROMPT_ID | $OPT_PHASE | $OPT_LINKED_PR | $OPT_REPO_AREA | $OPT_SESSION_URL | $OPT_MODEL | $OPT_CHAT_STRATEGY | $CCUSAGE_SOURCE | $INPUT_TOKENS | $OUTPUT_TOKENS | $CACHE_READ_TOKENS | $CACHE_CREATION_TOKENS | $TOTAL_TOKENS | $ESTIMATED_COST | $DELTA_INPUT | $DELTA_OUTPUT | $DELTA_CACHE_READ | $DELTA_CACHE_CREATION | $DELTA_TOTAL | $DELTA_COST | $OPT_WASTE_CLASSIFICATION | $OPT_MAIN_DRIVERS | $OPT_FOLLOW_UP_PATCHES | $OPT_EFFICIENCY_LESSON |"
+# ── Sanitized ledger row (7 columns: Date | PR / Branch | Level | Chat | ──────────
+#    Follow-ups | Waste | Lesson) ───────────────────────────────────────────────
+# Token/cost/prompt-id/phase/model/linked-PR detail stays in the raw local snapshot
+# and the PR-body usage note printed below — it is not written to the committed row.
+sanitize_cell() {
+  # Collapse newlines/CR to spaces and strip literal pipes so the row can't split
+  # into the wrong number of Markdown table columns.
+  printf '%s' "$1" | tr '\n' ' ' | tr -d '\r' | sed 's/|/\//g'
+}
+
+ROW_PR_BRANCH="$OPT_PR"
+if [ "$ROW_PR_BRANCH" = "unknown" ]; then
+  ROW_PR_BRANCH="$BRANCH"
+fi
+ROW_PR_BRANCH=$(sanitize_cell "$ROW_PR_BRANCH")
+ROW_LEVEL=$(sanitize_cell "$OPT_LEVEL")
+ROW_CHAT=$(sanitize_cell "$OPT_CHAT_STRATEGY")
+ROW_FOLLOWUPS=$(sanitize_cell "$OPT_FOLLOW_UP_PATCHES")
+ROW_WASTE=$(sanitize_cell "$OPT_WASTE_CLASSIFICATION")
+ROW_LESSON=$(sanitize_cell "$OPT_EFFICIENCY_LESSON")
+
+LESSON_WORD_COUNT=$(printf '%s\n' "$OPT_EFFICIENCY_LESSON" | wc -w | tr -d ' ')
+if [ "$LESSON_WORD_COUNT" -gt 25 ] 2>/dev/null; then
+  printf 'WARNING: --efficiency-lesson is %s words (max 25) — trim before committing to docs/ai/USAGE_LEDGER.md.\n' "$LESSON_WORD_COUNT" >&2
+fi
+
+LEDGER_ROW="| $DATE_ONLY | $ROW_PR_BRANCH | $ROW_LEVEL | $ROW_CHAT | $ROW_FOLLOWUPS | $ROW_WASTE | $ROW_LESSON |"
 
 # ── Print usage note ───────────────────────────────────────────────────────────
 printf '\n=== AI Usage Note ===\n'
@@ -338,7 +380,7 @@ printf 'Paste this line into the PR body (fill bracketed fields):\n'
 printf '**Usage note:** Low/Medium/High; source: %s; main drivers: [fill]; justified: yes/partially/no; next efficiency improvement: [fill]\n\n' "$CCUSAGE_SOURCE"
 
 # ── Print sanitized ledger row ─────────────────────────────────────────────────
-printf '=== Sanitized Ledger Row (for docs/ai/USAGE_LEDGER.md) ===\n'
+printf '=== Sanitized Ledger Row (7 columns, for docs/ai/USAGE_LEDGER.md) ===\n'
 printf '%s\n' "$LEDGER_ROW"
 printf '=== End Ledger Row ===\n\n'
 

@@ -36,12 +36,17 @@ SELF_AUDIT_ANCHORS = [
 ]
 
 USAGE_LEDGER_ANCHORS = [
-    "Prompt ID",
-    "Phase",
-    "Linked PR",
-    "Δ total",
+    "Date",
+    "PR / Branch",
+    "Level",
+    "Chat",
+    "Follow-ups",
     "Waste",
+    "Lesson",
 ]
+
+USAGE_LEDGER_HEADER = "| Date | PR / Branch | Level | Chat | Follow-ups | Waste | Lesson |"
+USAGE_LEDGER_ARCHIVE_REF = "USAGE_LEDGER_ARCHIVE_2026H1.md"
 
 SNAPSHOT_SCRIPT_ANCHORS = [
     "--append-ledger",
@@ -149,6 +154,36 @@ def check_usage_ledger_columns() -> None:
         raise AssertionError("docs/ai/USAGE_LEDGER.md is missing")
     text = read_text(ledger_path)
     assert_anchors(text, USAGE_LEDGER_ANCHORS, "USAGE_LEDGER.md")
+
+    if USAGE_LEDGER_HEADER not in text:
+        raise AssertionError(
+            f"docs/ai/USAGE_LEDGER.md missing exact seven-column header: {USAGE_LEDGER_HEADER}"
+        )
+
+    if USAGE_LEDGER_ARCHIVE_REF not in text:
+        raise AssertionError(
+            f"docs/ai/USAGE_LEDGER.md missing archive reference to {USAGE_LEDGER_ARCHIVE_REF}"
+        )
+
+    data_rows = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s.startswith("|") or "---" in s or s == USAGE_LEDGER_HEADER:
+            continue
+        cells = s.strip("|").split("|")
+        if len(cells) < 2:
+            continue
+        data_rows.append((s, cells))
+
+    if not data_rows:
+        raise AssertionError("docs/ai/USAGE_LEDGER.md has no substantive data row")
+
+    for row_text, cells in data_rows:
+        if len(cells) != 7:
+            raise AssertionError(
+                f"docs/ai/USAGE_LEDGER.md data row does not have exactly seven columns "
+                f"({len(cells)} found): {row_text}"
+            )
 
 
 def check_gitignore_excludes_ai_usage() -> None:
