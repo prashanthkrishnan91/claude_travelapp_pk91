@@ -245,6 +245,7 @@ OPEN_PR_SWEEP_PROHIBITED_ANCHORS = [
     "schedule or re-arm another watcher",
 ]
 CLAUDE_MD_NO_HOURLY_POLLING_ANCHOR = "no hourly or per-PR polling chains"
+OPEN_PR_SWEEP_CONCURRENT_BLOCKERS_ANCHOR = "Report every concurrently present CI, review, and mergeability blocker"
 
 
 def check_open_pr_sweep_contract() -> None:
@@ -268,6 +269,11 @@ def check_open_pr_sweep_contract() -> None:
         )
     assert_anchors(skill_text, OPEN_PR_SWEEP_GUARD_ANCHORS, "open-pr-sweep read-only/reporting-only guard")
     assert_anchors(skill_text, OPEN_PR_SWEEP_PROHIBITED_ANCHORS, "open-pr-sweep prohibited mutation category")
+    if OPEN_PR_SWEEP_CONCURRENT_BLOCKERS_ANCHOR not in skill_text:
+        raise AssertionError(
+            f"{OPEN_PR_SWEEP_SKILL_PATH} missing concurrent-blockers reporting anchor: "
+            f"{OPEN_PR_SWEEP_CONCURRENT_BLOCKERS_ANCHOR}"
+        )
 
     claude_md_text = read_text(ROOT / "CLAUDE.md")
     if CLAUDE_MD_NO_HOURLY_POLLING_ANCHOR not in claude_md_text:

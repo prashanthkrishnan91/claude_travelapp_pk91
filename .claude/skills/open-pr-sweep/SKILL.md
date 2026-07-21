@@ -49,14 +49,20 @@ PRs in one pass** and produces one compact report.
 Compact and action-oriented. For each PR with something to report, state:
 
 - PR number/title, one line
-- state: one of **CI failure**, **review blocker**, **merge conflict**, **pending
-  checks**, or **green/waiting** — pick the single most accurate label; do not blend
-  states
+- "States:" one or more applicable states from: **CI failure**, **review blocker**,
+  **merge conflict**, **pending checks**, **green/waiting**
+- Report every concurrently present CI, review, and mergeability blocker — a PR can
+  simultaneously have failed CI, an unresolved requested-changes review, a merge
+  conflict, and pending checks all at once. Never let a primary or summary status
+  suppress another material blocker.
+- Use "green/waiting" only when no failure, review blocker, conflict, or pending check
+  exists.
 - what changed in the lookback window (or "no meaningful change" if the PR is only
   listed because it needed a state label)
 - what a human needs to decide next, if anything
 
-Never claim a check state, review state, or mergeability state you could not actually
+Continue to report only evidence retrieved during the current run; never guess. Never
+claim a check state, review state, or mergeability state you could not actually
 retrieve evidence for in this run — say "not retrievable this run" instead of guessing
 or assuming a prior known state still holds.
 
