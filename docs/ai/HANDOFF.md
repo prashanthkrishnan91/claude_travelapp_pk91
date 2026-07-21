@@ -1,12 +1,14 @@
 # HANDOFF — current state only
 
 ## Active work
-- Docs-only slice: root-level `DOSSIER.md` (interview dossier synthesized from repo evidence),
-  branch `claude/analytics-interview-dossier-becb4g`. No app code touched.
+- Workflow-only slice: SETUP_AUDIT Cluster 5, corrected to read-only/reporting-only. Added
+  `.claude/skills/open-pr-sweep/SKILL.md` + `.claude/commands/open-pr-sweep.md`, a CLAUDE.md
+  no-hourly-polling rule, and a `certify_v4_1.py` structural contract check. Branch
+  `claude/travel-open-pr-sweep-2mpsdo`.
 - No product implementation PR is open.
-- AI Route Planning v1 shipped in PR #533; workflow Cluster 1 (ship-pr) in #535; Cluster 2
-  context-tax reduction merged in #536.
-- Next step: review/merge of the dossier PR, then SETUP_AUDIT Clusters 3–7 remain available.
+- The sweep contract is automation-ready but **not yet scheduled** — the live 12-hour
+  Routine will be created only after this PR passes semantic audit and merges.
+- Next step: review/merge of this PR, then SETUP_AUDIT Clusters 3, 4, 6, 7 remain available.
 
 ## Blocked / waiting on user
 - AI Route Planning v1's user-facing flow requires all of `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED`,
