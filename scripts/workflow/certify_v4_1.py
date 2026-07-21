@@ -225,6 +225,57 @@ def check_readiness_hook_or_doc() -> None:
         )
 
 
+OPEN_PR_SWEEP_SKILL_PATH = ".claude/skills/open-pr-sweep/SKILL.md"
+OPEN_PR_SWEEP_COMMAND_PATH = ".claude/commands/open-pr-sweep.md"
+OPEN_PR_SWEEP_REPO_SCOPE = "prashanthkrishnan91/claude_travelapp_pk91"
+OPEN_PR_SWEEP_GUARD_ANCHORS = [
+    "Immutable guard",
+    "read-only and reporting-only",
+]
+OPEN_PR_SWEEP_PROHIBITED_ANCHORS = [
+    "edit files or branches",
+    "create commits or push",
+    "patch CI failures",
+    "comment on PRs or review threads",
+    "approve or request changes",
+    "add/remove labels or reviewers",
+    "merge, close, or reopen PRs",
+    "rerun, cancel, or dispatch workflows",
+    "create another PR",
+    "schedule or re-arm another watcher",
+]
+CLAUDE_MD_NO_HOURLY_POLLING_ANCHOR = "no hourly or per-PR polling chains"
+
+
+def check_open_pr_sweep_contract() -> None:
+    skill_path = ROOT / OPEN_PR_SWEEP_SKILL_PATH
+    command_path = ROOT / OPEN_PR_SWEEP_COMMAND_PATH
+    if not skill_path.exists():
+        raise AssertionError(f"Missing required file: {OPEN_PR_SWEEP_SKILL_PATH}")
+    if not command_path.exists():
+        raise AssertionError(f"Missing required file: {OPEN_PR_SWEEP_COMMAND_PATH}")
+
+    command_text = read_text(command_path)
+    if OPEN_PR_SWEEP_SKILL_PATH not in command_text:
+        raise AssertionError(
+            f"{OPEN_PR_SWEEP_COMMAND_PATH} does not point to {OPEN_PR_SWEEP_SKILL_PATH}"
+        )
+
+    skill_text = read_text(skill_path)
+    if OPEN_PR_SWEEP_REPO_SCOPE not in skill_text:
+        raise AssertionError(
+            f"{OPEN_PR_SWEEP_SKILL_PATH} missing exact Travel repository scope: {OPEN_PR_SWEEP_REPO_SCOPE}"
+        )
+    assert_anchors(skill_text, OPEN_PR_SWEEP_GUARD_ANCHORS, "open-pr-sweep read-only/reporting-only guard")
+    assert_anchors(skill_text, OPEN_PR_SWEEP_PROHIBITED_ANCHORS, "open-pr-sweep prohibited mutation category")
+
+    claude_md_text = read_text(ROOT / "CLAUDE.md")
+    if CLAUDE_MD_NO_HOURLY_POLLING_ANCHOR not in claude_md_text:
+        raise AssertionError(
+            f"CLAUDE.md missing no-hourly-polling rule anchor: {CLAUDE_MD_NO_HOURLY_POLLING_ANCHOR}"
+        )
+
+
 def check_dangerous_action_guard() -> None:
     guard_doc = ROOT / "docs/ai/DANGEROUS_ACTION_GUARD.md"
     guard_hook = ROOT / ".claude/hooks/dangerous_action_guard.sh"
@@ -255,6 +306,7 @@ def main() -> int:
     check_prompt_standard_usage_footer()
     check_readiness_hook_or_doc()
     check_dangerous_action_guard()
+    check_open_pr_sweep_contract()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0

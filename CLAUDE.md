@@ -151,6 +151,7 @@ Useful command aliases (call only when relevant): `/test-selector`, `/contract-a
 - Personal Claude skills are accelerators only — they do not replace repo rules, budget gates, or product invariants.
 - Before destructive file/git/deploy operations, consult `docs/ai/DANGEROUS_ACTION_GUARD.md`.
 - Every PR summary must include a compact AI usage note. See `docs/ai/AI_USAGE_TRACKING.md`.
+- PR watching: no hourly or per-PR polling chains. Use one Travel-wide `/open-pr-sweep` to check all open PRs in one pass. Once separately activated after this rule merges, any scheduled sweep must fire no more frequently than every 12 hours. The sweep is permanently reporting-only — it never makes GitHub mutations without an explicit later user request.
 
 ## Project invariants
 
