@@ -7,6 +7,7 @@ Archived history: `docs/ai/USAGE_LEDGER_ARCHIVE_2026H1.md`
 | 2026-07-19 | claude/context-tax-reduction-cluster-2-65e2xb | 0 | new-chat | 1 | preventable-follow-up | Schema-replacement PRs must audit every downstream reader/writer (certify script, snapshot/backfill tools, docs), not only the readiness gate. |
 | 2026-07-19 | claude/analytics-interview-dossier-becb4g | 0 | new-chat | 0 | none | Repo-wide dossier synthesis via five parallel read-only subagents kept main context small; docs-only PRs still ship through full template body. |
 | 2026-07-21 | claude/travel-open-pr-sweep-2mpsdo | 0 | new-chat | 1 | preventable-follow-up | Semantic audit caught the sweep's single-state reporting rule could suppress concurrent CI/review/conflict blockers on one PR. |
+| 2026-07-22 | claude/setup-audit-cluster-3-travel-90k08o | 0 | new-chat | 0 | none | Operationalizing "stop at two patches" needed a durable dead-end registry, not just a repeated CLAUDE.md sentence. |
 
 Rules:
 - One row per PR.

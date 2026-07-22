@@ -133,6 +133,7 @@ Useful command aliases (call only when relevant): `/test-selector`, `/contract-a
 - No broad discovery. Read primary target files first; fallback only if blocked.
 - Classify severity using `ISSUE_SEVERITY_ROUTING.md` before choosing patch / full-plumbing / split.
 - After one failed patch, reclassify. After two related patches, escalate to full plumbing analysis or split plan.
+- At the second related failure, run `failure-recovery` before any third patch; check `docs/ai/DEAD_ENDS.md` before investigating a provider, data source, or previously tried approach; add a registry row only when an approach is evidence-proven and abandoned.
 - On a tool/test/log failure, run `tool-failure-triage` and classify before patching. Do not patch app code for tooling failures.
 - Smallest safe patch within the chosen capability slice. No unrelated refactors. Every changed line must trace to the task.
 - For non-trivial work, state assumptions and success criteria before coding.
