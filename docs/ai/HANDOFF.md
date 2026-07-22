@@ -1,14 +1,16 @@
 # HANDOFF — current state only
 
 ## Active work
-- Workflow-only slice: SETUP_AUDIT Cluster 5, corrected to read-only/reporting-only. Added
-  `.claude/skills/open-pr-sweep/SKILL.md` + `.claude/commands/open-pr-sweep.md`, a CLAUDE.md
-  no-hourly-polling rule, and a `certify_v4_1.py` structural contract check. Branch
-  `claude/travel-open-pr-sweep-2mpsdo`.
-- No product implementation PR is open.
-- The sweep contract is automation-ready but **not yet scheduled** — the live 12-hour
-  Routine will be created only after this PR passes semantic audit and merges.
-- Next step: review/merge of this PR, then SETUP_AUDIT Clusters 3, 4, 6, 7 remain available.
+- Workflow-only slice: SETUP_AUDIT Cluster 3 — replaced `.claude/skills/failure-recovery/SKILL.md`
+  with a frontmatter'd skill that operationalizes the two-failure stop rule, added
+  `docs/ai/DEAD_ENDS.md` (durable Travel dead-end registry), a CLAUDE.md Core rule tying the
+  two into the existing patch-exhaustion rule, and a `certify_v4_1.py` structural contract
+  check. Branch `claude/setup-audit-cluster-3-travel-90k08o`.
+- #539 merged (open-PR sweep semantic fix: concurrent blockers must all be reported, not one
+  state). The 12-hour Travel PR Sweep Routine is now active and permanently reporting-only —
+  it never makes GitHub mutations without an explicit later user request.
+- No other product implementation PR is open.
+- Next step: review/merge of this PR, then SETUP_AUDIT Clusters 4, 6, 7 remain available.
 
 ## Blocked / waiting on user
 - AI Route Planning v1's user-facing flow requires all of `AI_ROUTE_REORDER_PROPOSAL_V1_ENABLED`,
@@ -22,6 +24,9 @@
 - No merge recommendation without semantic audit.
 - No UI merge without visual proof.
 - No runtime/provider claims without runtime evidence.
+- At the second related failure, run `failure-recovery` before any third patch; check
+  `docs/ai/DEAD_ENDS.md` before investigating a provider, data source, or previously tried
+  approach.
 - Avoid duplicate route-planning diagnostics/buttons — `RouteQualityDiagnosticNote` and
   `DayFlowReview` were deliberately removed from the itinerary UI (PR #532) for reading as
   internal/debug tooling.
@@ -30,7 +35,6 @@
 - Use `ship-pr` when opening a PR.
 
 ## Recently merged
+- #539 — open-PR sweep semantic fix: report every concurrent blocker, not a single state.
 - #535 — Claude Code workflow Cluster 1: added `ship-pr` skill for single-pass PR packaging.
 - #534 — Merged root-level `SETUP_AUDIT.md` workflow audit.
-- #533 — AI Route Planning v1: LLM-proposed day reorder verified by Google Routes, with
-  fixed-time-anchor and day-part-boundary enforcement.

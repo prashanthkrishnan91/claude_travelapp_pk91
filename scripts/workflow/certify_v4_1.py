@@ -282,6 +282,84 @@ def check_open_pr_sweep_contract() -> None:
         )
 
 
+FAILURE_RECOVERY_SKILL_PATH = ".claude/skills/failure-recovery/SKILL.md"
+DEAD_ENDS_PATH = "docs/ai/DEAD_ENDS.md"
+DEAD_ENDS_HEADER = "| Date | Area | Approach tried | Why it is a dead end | Proof |"
+FAILURE_RECOVERY_SECOND_FAILURE_ANCHOR = "Second failed related attempt (mandatory)"
+FAILURE_RECOVERY_EVIDENCE_STATEMENT = "Two attempts failed — switching to evidence-first diagnosis."
+FAILURE_RECOVERY_EVIDENCE_CATEGORY_ANCHORS = [
+    "persistence/data",
+    "runtime/API",
+    "UI",
+    "provider/data source",
+    "tool/test/log failure",
+]
+FAILURE_RECOVERY_ATTEMPT_THREE_ANCHORS = [
+    "Attempt three is permitted only against named evidence",
+    "full-plumbing fix or an explicit split plan",
+]
+DEAD_ENDS_SEED_ANCHORS = [
+    "PRs #501, #504, #508, #521, #530",
+    "PR #499 v1.1/v1.2",
+]
+DEAD_ENDS_PROHIBITION_ANCHORS = [
+    "Never record a successful solution as a dead end.",
+    "Do not add a duplicate row for the same approach and proof.",
+]
+CLAUDE_MD_FAILURE_RECOVERY_ANCHOR = "run `failure-recovery` before any third patch"
+
+
+def check_failure_recovery_contract() -> None:
+    skill_path = ROOT / FAILURE_RECOVERY_SKILL_PATH
+    if not skill_path.exists():
+        raise AssertionError(f"Missing required file: {FAILURE_RECOVERY_SKILL_PATH}")
+
+    skill_text = read_text(skill_path)
+    if not skill_text.startswith("---\nname: failure-recovery\n"):
+        raise AssertionError(
+            f"{FAILURE_RECOVERY_SKILL_PATH} missing valid YAML frontmatter with name: failure-recovery"
+        )
+
+    frontmatter_end = skill_text.find("\n---", 4)
+    frontmatter = skill_text[:frontmatter_end] if frontmatter_end != -1 else ""
+    if "description:" not in frontmatter or "description: Use when" not in frontmatter:
+        raise AssertionError(
+            f"{FAILURE_RECOVERY_SKILL_PATH} frontmatter description must begin with 'Use when'"
+        )
+
+    if FAILURE_RECOVERY_SECOND_FAILURE_ANCHOR not in skill_text:
+        raise AssertionError(
+            f"{FAILURE_RECOVERY_SKILL_PATH} missing second-failure trigger anchor: "
+            f"{FAILURE_RECOVERY_SECOND_FAILURE_ANCHOR}"
+        )
+
+    if FAILURE_RECOVERY_EVIDENCE_STATEMENT not in skill_text:
+        raise AssertionError(
+            f"{FAILURE_RECOVERY_SKILL_PATH} missing exact evidence-switch statement: "
+            f"{FAILURE_RECOVERY_EVIDENCE_STATEMENT}"
+        )
+
+    assert_anchors(skill_text, FAILURE_RECOVERY_EVIDENCE_CATEGORY_ANCHORS, "failure-recovery evidence category")
+    assert_anchors(skill_text, FAILURE_RECOVERY_ATTEMPT_THREE_ANCHORS, "failure-recovery attempt-three restriction")
+
+    dead_ends_path = ROOT / DEAD_ENDS_PATH
+    if not dead_ends_path.exists():
+        raise AssertionError(f"Missing required file: {DEAD_ENDS_PATH}")
+
+    dead_ends_text = read_text(dead_ends_path)
+    if DEAD_ENDS_HEADER not in dead_ends_text:
+        raise AssertionError(f"{DEAD_ENDS_PATH} missing exact five-column registry header: {DEAD_ENDS_HEADER}")
+
+    assert_anchors(dead_ends_text, DEAD_ENDS_SEED_ANCHORS, "DEAD_ENDS.md required Travel seed entry")
+    assert_anchors(dead_ends_text, DEAD_ENDS_PROHIBITION_ANCHORS, "DEAD_ENDS.md prohibition rule")
+
+    claude_md_text = read_text(ROOT / "CLAUDE.md")
+    if CLAUDE_MD_FAILURE_RECOVERY_ANCHOR not in claude_md_text:
+        raise AssertionError(
+            f"CLAUDE.md missing failure-recovery Core rule anchor: {CLAUDE_MD_FAILURE_RECOVERY_ANCHOR}"
+        )
+
+
 def check_dangerous_action_guard() -> None:
     guard_doc = ROOT / "docs/ai/DANGEROUS_ACTION_GUARD.md"
     guard_hook = ROOT / ".claude/hooks/dangerous_action_guard.sh"
@@ -313,6 +391,7 @@ def main() -> int:
     check_readiness_hook_or_doc()
     check_dangerous_action_guard()
     check_open_pr_sweep_contract()
+    check_failure_recovery_contract()
 
     print("✅ Travel workflow certification v4.1 checks passed (lightweight, structural, workflow-only).")
     return 0
